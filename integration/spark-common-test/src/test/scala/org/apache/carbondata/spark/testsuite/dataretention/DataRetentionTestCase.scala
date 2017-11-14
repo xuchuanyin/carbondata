@@ -144,6 +144,30 @@ class DataRetentionTestCase extends QueryTest with BeforeAndAfterAll {
     )
   }
 
+  test("RetentionTest_DeleteSegmentsByLoadTime_no_segment_before_this_time") {
+    val segments: Array[LoadMetadataDetails] =
+      SegmentStatusManager.readLoadMetadata(carbonTablePath)
+    // check segment length, it should be 3 (loads)
+    if (segments.length != 2) {
+      assert(false)
+    }
+
+    val actualValue: String = getSegmentStartTime(segments, 0)
+    val actualValueDate = defaultDateFormat.parse(actualValue)
+    val oneHourBeforeDate = DateUtils.addHours(actualValueDate, -1)
+    val oneHourBefore = defaultDateFormat.format(oneHourBeforeDate)
+
+    // no matched segment before this date, this should not fail.
+    var errorOccurs = false
+    try {
+      sql("delete from table DataRetentionTable where segment.starttime before '" +
+          oneHourBefore + "'")
+    } catch {
+      case e : Exception => errorOccurs = true
+    }
+    assert(!errorOccurs)
+  }
+
   test("RetentionTest3_DeleteByLoadId") {
     // delete segment 2 and load ind segment
     sql("delete from table DataRetentionTable where segment.id in (2)")

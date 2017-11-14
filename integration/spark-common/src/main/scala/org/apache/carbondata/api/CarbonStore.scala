@@ -151,7 +151,7 @@ object CarbonStore {
       dbName: String,
       tableName: String,
       carbonTable: CarbonTable): Unit = {
-    LOGGER.audit(s"Delete segment by Id request has been received for $dbName.$tableName")
+    LOGGER.audit(s"Delete segment by date request has been received for $dbName.$tableName")
 
     val time = validateTimeFormat(timestamp)
     val path = carbonTable.getMetaDataFilepath
@@ -166,7 +166,7 @@ object CarbonStore {
       if (invalidLoadTimestamps.isEmpty) {
         LOGGER.audit(s"Delete segment by date is successful for $dbName.$tableName.")
       } else {
-        sys.error("Delete segment by date is failed. No matching segment found.")
+        LOGGER.audit(s"No matching segment found before date '$timestamp' for $dbName.$tableName")
       }
     } catch {
       case ex: Exception =>

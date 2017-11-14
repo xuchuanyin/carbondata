@@ -410,7 +410,7 @@ public class SegmentStatusManager {
           }
 
         } else {
-          LOG.audit("Delete segment by date is failed. No matching segment found.");
+          LOG.audit("No matching segment found for deleting segment by date.");
           invalidLoadTimestamps.add(loadDate);
           return invalidLoadTimestamps;
         }
@@ -522,7 +522,7 @@ public class SegmentStatusManager {
    * @param invalidLoadTimestamps
    * @return invalidLoadTimestamps
    */
-  public static List<String> updateDeletionStatus(String loadDate,
+  private static List<String> updateDeletionStatus(String loadDate,
       LoadMetadataDetails[] listOfLoadFolderDetailsArray, List<String> invalidLoadTimestamps,
       Long loadStartTime) {
     // For each load timestamp loop through data and if the
@@ -554,7 +554,7 @@ public class SegmentStatusManager {
 
     if (!loadFound) {
       invalidLoadTimestamps.add(loadDate);
-      LOG.audit("Delete segment by date is failed. No matching segment found.");
+      LOG.audit("No matching segment found for deleting segment by date.");
       return invalidLoadTimestamps;
     }
     return invalidLoadTimestamps;
