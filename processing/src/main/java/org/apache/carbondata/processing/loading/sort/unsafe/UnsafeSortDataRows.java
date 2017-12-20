@@ -17,10 +17,8 @@
 
 package org.apache.carbondata.processing.loading.sort.unsafe;
 
-import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -50,10 +48,7 @@ import org.apache.carbondata.processing.loading.sort.unsafe.sort.TimSort;
 import org.apache.carbondata.processing.loading.sort.unsafe.sort.UnsafeIntSortDataFormat;
 import org.apache.carbondata.processing.sort.exception.CarbonSortKeyAndGroupByException;
 import org.apache.carbondata.processing.sort.sortdata.SortParameters;
-import org.apache.carbondata.processing.sort.sortdata.SortTempFileChunkWriter;
 import org.apache.carbondata.processing.sort.sortdata.TableFieldStat;
-import org.apache.carbondata.processing.sort.sortdata.TempSortFileWriter;
-import org.apache.carbondata.processing.sort.sortdata.TempSortFileWriterFactory;
 import org.apache.carbondata.processing.util.CarbonDataProcessorUtil;
 
 public class UnsafeSortDataRows {
@@ -277,58 +272,6 @@ public class UnsafeSortDataRows {
    * @throws CarbonSortKeyAndGroupByException
    */
   private void writeDataToFile(UnsafeCarbonRowPage rowPage, File file)
-    throws CarbonSortKeyAndGroupByException {
-    if (parameters.isSortFileCompressionEnabled() || parameters.isPrefetch()) {
-      writeSortTempFile(rowPage, file);
-      return;
-    }
-    writeData(rowPage, file);
-  }
-
-  /**
-   * write carbon row to compressed sort temp file
-   * @param rowPage row page
-   * @param file sort temp file
-   * @throws CarbonSortKeyAndGroupByException
-   */
-  private void writeSortTempFile(UnsafeCarbonRowPage rowPage, File file)
-      throws CarbonSortKeyAndGroupByException {
-    TempSortFileWriter writer = null;
-    try {
-      writer = getWriter();
-      Object[][] rowsInPage = rowPage.getAllRows();
-      writer.initiaize(file, rowsInPage.length);
-      writer.writeSortTempFile(rowsInPage);
-    } catch (CarbonSortKeyAndGroupByException e) {
-      LOGGER.error("Encounter problem while writing the sort temp file");
-      throw e;
-    } finally {
-      if (null != writer) {
-        writer.finish();
-      }
-    }
-
-  }
-
-  /**
-   * get writer for writing sort temp file
-   * @return writer
-   */
-  private TempSortFileWriter getWriter() {
-    TempSortFileWriter chunkWriter = null;
-    TempSortFileWriter writer = TempSortFileWriterFactory.getInstance()
-        .getTempSortFileWriter(parameters.isSortFileCompressionEnabled(),
-            new TableFieldStat(parameters), parameters.getFileWriteBufferSize());
-    if (parameters.isPrefetch() && !parameters.isSortFileCompressionEnabled()) {
-      chunkWriter = new SortTempFileChunkWriter(writer, parameters.getBufferSize());
-    } else {
-      chunkWriter =
-          new SortTempFileChunkWriter(writer, parameters.getSortTempFileNoOFRecordsInCompression());
-    }
-    return chunkWriter;
-  }
-
-  private void writeData(UnsafeCarbonRowPage rowPage, File file)
       throws CarbonSortKeyAndGroupByException {
     DataOutputStream stream = null;
     try {

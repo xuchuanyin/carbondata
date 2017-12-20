@@ -29,6 +29,7 @@ import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.util.DataTypeUtil;
 import org.apache.carbondata.core.util.NonDictionaryUtil;
+import org.apache.carbondata.processing.sort.exception.CarbonSortKeyAndGroupByException;
 import org.apache.carbondata.processing.sort.sortdata.SortParameters;
 import org.apache.carbondata.processing.sort.sortdata.TableFieldStat;
 
@@ -97,8 +98,10 @@ public class SortStepRowHandler implements Serializable {
    * read one parted row from InputStream
    * @param inputStream input stream
    * @return a row that contains three parts
+   * @throws CarbonSortKeyAndGroupByException
    */
-  public Object[] readPartedRowFromInputStream(DataInputStream inputStream) {
+  public Object[] readPartedRowFromInputStream(DataInputStream inputStream)
+      throws CarbonSortKeyAndGroupByException {
     Object[] holder = new Object[3];
     try {
       int[] dictDims = new int[tableFieldStat.getDictDimCnt()];
@@ -149,7 +152,8 @@ public class SortStepRowHandler implements Serializable {
       NonDictionaryUtil.prepareOutObj(holder, dictDims, nonDictArray, measures);
 
     } catch (IOException e) {
-      throw new RuntimeException("Encounter problem while reading row from stream ", e);
+      throw new CarbonSortKeyAndGroupByException(
+          "Encounter problem while reading row from stream ", e);
     }
     return holder;
   }
@@ -159,8 +163,10 @@ public class SortStepRowHandler implements Serializable {
    *
    * @param row row
    * @param outputStream output stream
+   * @throws CarbonSortKeyAndGroupByException
    */
-  public void writePartedRowToOutputStream(Object[] row, DataOutputStream outputStream) {
+  public void writePartedRowToOutputStream(Object[] row, DataOutputStream outputStream) throws
+      CarbonSortKeyAndGroupByException {
     try {
       int[] dictDims = (int[]) row[WriteStepRowUtil.DICTIONARY_DIMENSION];
       byte[][] nonDictArray = (byte[][]) row[WriteStepRowUtil.NO_DICTIONARY_AND_COMPLEX];
@@ -207,7 +213,8 @@ public class SortStepRowHandler implements Serializable {
         }
       }
     } catch (IOException e) {
-      throw new RuntimeException("Encounter problem while writing row to stream ", e);
+      throw new CarbonSortKeyAndGroupByException(
+          "Encounter problem while writing row to stream ", e);
     }
   }
 

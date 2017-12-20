@@ -17,10 +17,8 @@
 
 package org.apache.carbondata.processing.sort.sortdata;
 
-import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Random;
@@ -218,7 +216,7 @@ public class SortDataRows {
       File file = new File(
           locationChosen + File.separator + parameters.getTableName() +
               System.nanoTime() + CarbonCommonConstants.SORT_TEMP_FILE_EXT);
-      writeDataTofile(recordHolderList, this.entryCount, file);
+      writeDataToFile(recordHolderList, this.entryCount, file);
 
     }
 
@@ -227,45 +225,13 @@ public class SortDataRows {
   }
 
   /**
-   * Below method will be used to write data to file
-   *
-   * @throws CarbonSortKeyAndGroupByException problem while writing
-   */
-  private void writeDataTofile(Object[][] recordHolderList, int entryCountLocal, File file)
-      throws CarbonSortKeyAndGroupByException {
-    // stream
-    if (parameters.isSortFileCompressionEnabled() || parameters.isPrefetch()) {
-      writeSortTempFile(recordHolderList, entryCountLocal, file);
-      return;
-    }
-    writeData(recordHolderList, entryCountLocal, file);
-  }
-
-  private void writeSortTempFile(Object[][] recordHolderList, int entryCountLocal, File file)
-      throws CarbonSortKeyAndGroupByException {
-    TempSortFileWriter writer = null;
-
-    try {
-      writer = getWriter();
-      writer.initiaize(file, entryCountLocal);
-      writer.writeSortTempFile(recordHolderList);
-    } catch (CarbonSortKeyAndGroupByException e) {
-      LOGGER.error(e, "Problem while writing the sort temp file");
-      throw e;
-    } finally {
-      if (writer != null) {
-        writer.finish();
-      }
-    }
-  }
-
-  /**
+   * write data to sort temp file
    * @param recordHolderList
    * @param entryCountLocal
    * @param file
    * @throws CarbonSortKeyAndGroupByException
    */
-  private void writeData(Object[][] recordHolderList, int entryCountLocal, File file)
+  private void writeDataToFile(Object[][] recordHolderList, int entryCountLocal, File file)
       throws CarbonSortKeyAndGroupByException {
     DataOutputStream stream = null;
     try {
@@ -286,22 +252,6 @@ public class SortDataRows {
       // close streams
       CarbonUtil.closeStreams(stream);
     }
-  }
-
-  private TempSortFileWriter getWriter() {
-    TempSortFileWriter chunkWriter = null;
-    TempSortFileWriter writer = TempSortFileWriterFactory.getInstance()
-        .getTempSortFileWriter(parameters.isSortFileCompressionEnabled(),
-            new TableFieldStat(parameters), parameters.getFileWriteBufferSize());
-
-    if (parameters.isPrefetch() && !parameters.isSortFileCompressionEnabled()) {
-      chunkWriter = new SortTempFileChunkWriter(writer, parameters.getBufferSize());
-    } else {
-      chunkWriter =
-          new SortTempFileChunkWriter(writer, parameters.getSortTempFileNoOFRecordsInCompression());
-    }
-
-    return chunkWriter;
   }
 
   /**
@@ -383,7 +333,7 @@ public class SortDataRows {
         File sortTempFile = new File(
             locationChosen + File.separator + parameters.getTableName() + System
                 .nanoTime() + CarbonCommonConstants.SORT_TEMP_FILE_EXT);
-        writeDataTofile(recordHolderArray, recordHolderArray.length, sortTempFile);
+        writeDataToFile(recordHolderArray, recordHolderArray.length, sortTempFile);
         // add sort temp filename to and arrayList. When the list size reaches 20 then
         // intermediate merging of sort temp files will be triggered
         intermediateFileMerger.addFileToMerge(sortTempFile);

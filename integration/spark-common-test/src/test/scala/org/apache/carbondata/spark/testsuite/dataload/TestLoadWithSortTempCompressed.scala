@@ -29,9 +29,9 @@ class TestLoadWithSortTempCompressed extends QueryTest
   val originOffHeapStatus: String = CarbonProperties.getInstance()
     .getProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT,
       CarbonCommonConstants.ENABLE_OFFHEAP_SORT_DEFAULT)
-  val originSortTempCompressStatus: String = CarbonProperties.getInstance()
-    .getProperty(CarbonCommonConstants.IS_SORT_TEMP_FILE_COMPRESSION_ENABLED,
-      CarbonCommonConstants.IS_SORT_TEMP_FILE_COMPRESSION_ENABLED_DEFAULTVALUE)
+  val originSortTempCompressor: String = CarbonProperties.getInstance()
+    .getProperty(CarbonCommonConstants.CARBON_SORT_TEMP_COMPRESSOR,
+      CarbonCommonConstants.CARBON_SORT_TEMP_COMPRESSOR_DEFAULT)
   val simpleTable = "simpleTable"
   val complexCarbonTable = "complexCarbonTable"
   val complexHiveTable = "complexHiveTable"
@@ -48,15 +48,15 @@ class TestLoadWithSortTempCompressed extends QueryTest
     sql(s"drop table if exists $complexHiveTable")
   }
 
-  override def beforeAll(): Unit = {
-    CarbonProperties.getInstance()
-      .addProperty(CarbonCommonConstants.IS_SORT_TEMP_FILE_COMPRESSION_ENABLED, "true")
-  }
 
+  override protected def beforeAll(): Unit = {
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_SORT_TEMP_COMPRESSOR,
+      "SNAPPY")
+  }
   override def afterAll(): Unit = {
     CarbonProperties.getInstance()
-      .addProperty(CarbonCommonConstants.IS_SORT_TEMP_FILE_COMPRESSION_ENABLED,
-        originSortTempCompressStatus)
+      .addProperty(CarbonCommonConstants.CARBON_SORT_TEMP_COMPRESSOR,
+        originSortTempCompressor)
     CarbonProperties.getInstance()
       .addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, originOffHeapStatus)
   }
@@ -82,7 +82,7 @@ class TestLoadWithSortTempCompressed extends QueryTest
     checkAnswer(sql(s"select count(*) from $simpleTable where c5 > 5001"), Row(5001))
   }
 
-  test("test data load for simple table with sort temp compressed enabled" +
+  test("test data load for simple table with sort temp compressed with snappy" +
        " and off-heap sort enabled") {
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "true")
     testSimpleTable()
@@ -90,7 +90,7 @@ class TestLoadWithSortTempCompressed extends QueryTest
       originOffHeapStatus)
   }
 
-  test("test data load for simple table with sort temp compressed enabled" +
+  test("test data load for simple table with sort temp compressed with snappy" +
        " and off-heap sort disabled") {
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "false")
     testSimpleTable()
@@ -136,7 +136,7 @@ class TestLoadWithSortTempCompressed extends QueryTest
           " where locationinfo[0].ActiveAreaId > 2 AND locationinfo[0].ActiveAreaId < 7"))
   }
 
-  test("test data load for complex table with sort temp compressed enabled" +
+  test("test data load for complex table with sort temp compressed with snappy" +
        " and off-heap sort enabled") {
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "true")
     testComplexTable()
@@ -144,7 +144,7 @@ class TestLoadWithSortTempCompressed extends QueryTest
       originOffHeapStatus)
   }
 
-  test("test data load for complex table with sort temp compressed enabled" +
+  test("test data load for complex table with sort temp compressed with snappy" +
        " and off-heap sort disabled") {
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "false")
     testComplexTable()

@@ -17,11 +17,9 @@
 
 package org.apache.carbondata.processing.loading.sort.unsafe.merger;
 
-import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.AbstractQueue;
 import java.util.PriorityQueue;
@@ -37,10 +35,7 @@ import org.apache.carbondata.processing.loading.sort.unsafe.holder.SortTempChunk
 import org.apache.carbondata.processing.loading.sort.unsafe.holder.UnsafeSortTempFileChunkHolder;
 import org.apache.carbondata.processing.sort.exception.CarbonSortKeyAndGroupByException;
 import org.apache.carbondata.processing.sort.sortdata.SortParameters;
-import org.apache.carbondata.processing.sort.sortdata.SortTempFileChunkWriter;
 import org.apache.carbondata.processing.sort.sortdata.TableFieldStat;
-import org.apache.carbondata.processing.sort.sortdata.TempSortFileWriter;
-import org.apache.carbondata.processing.sort.sortdata.TempSortFileWriterFactory;
 
 public class UnsafeIntermediateFileMerger implements Callable<Void> {
   /**
@@ -68,13 +63,6 @@ public class UnsafeIntermediateFileMerger implements Callable<Void> {
    * totalNumberOfRecords
    */
   private int totalNumberOfRecords;
-  private Object[][] records;
-  private int entryCount = 0;
-  /**
-   * writer
-   */
-  private TempSortFileWriter writer;
-
   private SortParameters mergerParameters;
 
   private File[] intermediateFiles;
@@ -118,11 +106,6 @@ public class UnsafeIntermediateFileMerger implements Callable<Void> {
       throwable = e;
     } finally {
       CarbonUtil.closeStreams(this.stream);
-      if (null != writer) {
-        writer.writeSortTempFile(records);
-        writer.finish();
-      }
-      records = null;
       if (null == throwable) {
         try {
           finish();
@@ -148,39 +131,16 @@ public class UnsafeIntermediateFileMerger implements Callable<Void> {
    * @throws CarbonSortKeyAndGroupByException
    */
   private void initialize() throws CarbonSortKeyAndGroupByException {
-    if (!mergerParameters.isSortFileCompressionEnabled() && !mergerParameters.isPrefetch()) {
-      try {
-        String compressor = CarbonProperties.getInstance().getSortTempCompressor();
-        stream = FileFactory.getDataOutputStream(outPutFile.getPath(), FileFactory.FileType.LOCAL,
-            mergerParameters.getFileWriteBufferSize(), compressor);
-        this.stream.writeInt(this.totalNumberOfRecords);
-      } catch (FileNotFoundException e) {
-        throw new CarbonSortKeyAndGroupByException("Problem while getting the file", e);
-      } catch (IOException e) {
-        throw new CarbonSortKeyAndGroupByException("Problem while writing the data to file", e);
-      }
-    } else {
-      writer = getWriter();
-      writer.initiaize(outPutFile, totalNumberOfRecords);
+    try {
+      String compressor = CarbonProperties.getInstance().getSortTempCompressor();
+      stream = FileFactory.getDataOutputStream(outPutFile.getPath(), FileFactory.FileType.LOCAL,
+          mergerParameters.getFileWriteBufferSize(), compressor);
+      this.stream.writeInt(this.totalNumberOfRecords);
+    } catch (FileNotFoundException e) {
+      throw new CarbonSortKeyAndGroupByException("Problem while getting the file", e);
+    } catch (IOException e) {
+      throw new CarbonSortKeyAndGroupByException("Problem while writing the data to file", e);
     }
-  }
-
-  /**
-   * get writer for writing temp sort file
-   * @return
-   */
-  private TempSortFileWriter getWriter() {
-    TempSortFileWriter chunkWriter = null;
-    TempSortFileWriter writer = TempSortFileWriterFactory.getInstance()
-        .getTempSortFileWriter(mergerParameters.isSortFileCompressionEnabled(),
-            tableFieldStat, mergerParameters.getFileWriteBufferSize());
-    if (mergerParameters.isPrefetch() && !mergerParameters.isSortFileCompressionEnabled()) {
-      chunkWriter = new SortTempFileChunkWriter(writer, mergerParameters.getBufferSize());
-    } else {
-      chunkWriter = new SortTempFileChunkWriter(writer,
-          mergerParameters.getSortTempFileNoOFRecordsInCompression());
-    }
-    return chunkWriter;
   }
 
   /**
@@ -293,15 +253,7 @@ public class UnsafeIntermediateFileMerger implements Callable<Void> {
    *
    * @throws CarbonSortKeyAndGroupByException problem while writing
    */
-  private void writeDataTofile(Object[] row) throws CarbonSortKeyAndGroupByException, IOException {
-    // for compressed temp sort file, just add the rows to holder and write them in the enc
-    if (mergerParameters.isSortFileCompressionEnabled() || mergerParameters.isPrefetch()) {
-      if (entryCount == 0) {
-        records = new Object[totalNumberOfRecords][];
-      }
-      records[entryCount++] = row;
-      return;
-    }
+  private void writeDataTofile(Object[] row) throws CarbonSortKeyAndGroupByException {
     sortStepRowHandler.writePartedRowToOutputStream(row, stream);
   }
 

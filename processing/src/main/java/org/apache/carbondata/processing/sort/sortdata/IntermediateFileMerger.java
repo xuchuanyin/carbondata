@@ -17,11 +17,9 @@
 
 package org.apache.carbondata.processing.sort.sortdata;
 
-import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.AbstractQueue;
 import java.util.PriorityQueue;
@@ -62,26 +60,6 @@ public class IntermediateFileMerger implements Callable<Void> {
    */
   private int totalNumberOfRecords;
 
-  /**
-   * records
-   */
-  private Object[][] records;
-
-  /**
-   * entryCount
-   */
-  private int entryCount;
-
-  /**
-   * writer
-   */
-  private TempSortFileWriter writer;
-
-  /**
-   * totalSize
-   */
-  private int totalSize;
-
   private SortParameters mergerParameters;
 
   private File[] intermediateFiles;
@@ -114,18 +92,6 @@ public class IntermediateFileMerger implements Callable<Void> {
       while (hasNext()) {
         writeDataTofile(next());
       }
-      if (mergerParameters.isSortFileCompressionEnabled() || mergerParameters.isPrefetch()) {
-        if (entryCount > 0) {
-          if (entryCount < totalSize) {
-            Object[][] temp = new Object[entryCount][];
-            System.arraycopy(records, 0, temp, 0, entryCount);
-            records = temp;
-            this.writer.writeSortTempFile(temp);
-          } else {
-            this.writer.writeSortTempFile(records);
-          }
-        }
-      }
       double intermediateMergeCostTime =
           (System.currentTimeMillis() - intermediateMergeStartTime) / 1000.0;
       LOGGER.info("============================== Intermediate Merge of " + fileConterConst +
@@ -135,11 +101,7 @@ public class IntermediateFileMerger implements Callable<Void> {
       clear();
       throwable = e;
     } finally {
-      records = null;
       CarbonUtil.closeStreams(this.stream);
-      if (null != writer) {
-        writer.finish();
-      }
       if (null == throwable) {
         try {
           finish();
@@ -165,28 +127,15 @@ public class IntermediateFileMerger implements Callable<Void> {
    * @throws CarbonSortKeyAndGroupByException
    */
   private void initialize() throws CarbonSortKeyAndGroupByException {
-    if (!mergerParameters.isSortFileCompressionEnabled() && !mergerParameters.isPrefetch()) {
-      try {
-        String compressor = CarbonProperties.getInstance().getSortTempCompressor();
-        stream = FileFactory.getDataOutputStream(outPutFile.getPath(), FileFactory.FileType.LOCAL,
-            mergerParameters.getFileWriteBufferSize(), compressor);
-        this.stream.writeInt(this.totalNumberOfRecords);
-      } catch (FileNotFoundException e) {
-        throw new CarbonSortKeyAndGroupByException("Problem while getting the file", e);
-      } catch (IOException e) {
-        throw new CarbonSortKeyAndGroupByException("Problem while writing the data to file", e);
-      }
-    } else {
-      writer = TempSortFileWriterFactory.getInstance()
-          .getTempSortFileWriter(mergerParameters.isSortFileCompressionEnabled(),
-              tableFieldStat, mergerParameters.getFileWriteBufferSize());
-      writer.initiaize(outPutFile, totalNumberOfRecords);
-
-      if (mergerParameters.isPrefetch()) {
-        totalSize = mergerParameters.getBufferSize();
-      } else {
-        totalSize = mergerParameters.getSortTempFileNoOFRecordsInCompression();
-      }
+    try {
+      String compressor = CarbonProperties.getInstance().getSortTempCompressor();
+      stream = FileFactory.getDataOutputStream(outPutFile.getPath(), FileFactory.FileType.LOCAL,
+          mergerParameters.getFileWriteBufferSize(), compressor);
+      this.stream.writeInt(this.totalNumberOfRecords);
+    } catch (FileNotFoundException e) {
+      throw new CarbonSortKeyAndGroupByException("Problem while getting the file", e);
+    } catch (IOException e) {
+      throw new CarbonSortKeyAndGroupByException("Problem while writing the data to file", e);
     }
   }
 
@@ -305,22 +254,6 @@ public class IntermediateFileMerger implements Callable<Void> {
    * @throws CarbonSortKeyAndGroupByException problem while writing
    */
   private void writeDataTofile(Object[] row) throws CarbonSortKeyAndGroupByException {
-    if (mergerParameters.isSortFileCompressionEnabled() || mergerParameters.isPrefetch()) {
-      if (entryCount == 0) {
-        records = new Object[totalSize][];
-        records[entryCount++] = row;
-        return;
-      }
-
-      records[entryCount++] = row;
-      if (entryCount == totalSize) {
-        this.writer.writeSortTempFile(records);
-        entryCount = 0;
-        records = new Object[totalSize][];
-      }
-      return;
-    }
-
     sortStepRowHandler.writePartedRowToOutputStream(row, stream);
   }
 

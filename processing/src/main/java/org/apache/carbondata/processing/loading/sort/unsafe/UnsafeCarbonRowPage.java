@@ -18,13 +18,13 @@
 package org.apache.carbondata.processing.loading.sort.unsafe;
 
 import java.io.DataOutputStream;
-import java.io.IOException;
 
 import org.apache.carbondata.core.memory.IntPointerBuffer;
 import org.apache.carbondata.core.memory.MemoryBlock;
 import org.apache.carbondata.core.memory.UnsafeMemoryManager;
 import org.apache.carbondata.core.memory.UnsafeSortMemoryManager;
 import org.apache.carbondata.processing.loading.sort.SortStepRowHandler;
+import org.apache.carbondata.processing.sort.exception.CarbonSortKeyAndGroupByException;
 import org.apache.carbondata.processing.sort.sortdata.TableFieldStat;
 
 /**
@@ -88,23 +88,16 @@ public class UnsafeCarbonRowPage {
     return sortStepRowHandler.readPartedRowFromUnsafeMemory(dataBlock.getBaseObject(), address);
   }
 
-  public void fillRow(long address, DataOutputStream stream) throws IOException {
+  /**
+   * write a row to stream
+   * @param address address of a row
+   * @param stream stream
+   * @throws CarbonSortKeyAndGroupByException
+   */
+  public void fillRow(long address, DataOutputStream stream) throws
+      CarbonSortKeyAndGroupByException {
     Object[] row = getRow(address);
     sortStepRowHandler.writePartedRowToOutputStream(row, stream);
-  }
-
-  /**
-   * get all rows in this carbon row page
-   * @return all rows
-   */
-  public Object[][] getAllRows() {
-    int entryCount = buffer.getActualSize();
-    Object[][] allRows = new Object[entryCount][];
-    for (int rowIdx = 0; rowIdx < entryCount; rowIdx++) {
-      long rowAddress = dataBlock.getBaseOffset() + buffer.get(rowIdx);
-      allRows[rowIdx] = getRow(rowAddress);
-    }
-    return allRows;
   }
 
   public void freeMemory() {
