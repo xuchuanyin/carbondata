@@ -1332,6 +1332,17 @@ public final class CarbonCommonConstants {
   public static final String CARBON_USE_MULTI_TEMP_DIR_DEFAULT = "false";
 
   /**
+   * name of compressor to compress sort temp files
+   */
+  @CarbonProperty
+  public static final String CARBON_SORT_TEMP_COMPRESSOR = "carbon.sort.temp.compressor";
+
+  /**
+   * The optional values are 'SNAPPY','GZIP','BZIP2','LZ4'.
+   * By default, empty means that Carbondata will not compress the sort temp files.
+   */
+  public static final String CARBON_SORT_TEMP_COMPRESSOR_DEFAULT = "";
+  /**
    * Which storage level to persist rdd when sort_scope=global_sort
    */
   @CarbonProperty
