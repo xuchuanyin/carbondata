@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
+import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonThreadFactory;
 import org.apache.carbondata.core.util.CarbonUtil;
@@ -269,8 +270,9 @@ public class SortDataRows {
     DataOutputStream stream = null;
     try {
       // open stream
-      stream = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file),
-          parameters.getFileWriteBufferSize()));
+      String compressor = CarbonProperties.getInstance().getSortTempCompressor();
+      stream = FileFactory.getDataOutputStream(file.getPath(), FileFactory.FileType.LOCAL,
+          parameters.getFileWriteBufferSize(), compressor);
 
       // write number of entries to the file
       stream.writeInt(entryCountLocal);

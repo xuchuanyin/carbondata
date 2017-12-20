@@ -29,6 +29,8 @@ import java.util.concurrent.Callable;
 
 import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.processing.loading.sort.SortStepRowHandler;
 import org.apache.carbondata.processing.loading.sort.unsafe.holder.SortTempChunkHolder;
@@ -148,9 +150,9 @@ public class UnsafeIntermediateFileMerger implements Callable<Void> {
   private void initialize() throws CarbonSortKeyAndGroupByException {
     if (!mergerParameters.isSortFileCompressionEnabled() && !mergerParameters.isPrefetch()) {
       try {
-        this.stream = new DataOutputStream(
-            new BufferedOutputStream(new FileOutputStream(outPutFile),
-                mergerParameters.getFileWriteBufferSize()));
+        String compressor = CarbonProperties.getInstance().getSortTempCompressor();
+        stream = FileFactory.getDataOutputStream(outPutFile.getPath(), FileFactory.FileType.LOCAL,
+            mergerParameters.getFileWriteBufferSize(), compressor);
         this.stream.writeInt(this.totalNumberOfRecords);
       } catch (FileNotFoundException e) {
         throw new CarbonSortKeyAndGroupByException("Problem while getting the file", e);

@@ -34,6 +34,7 @@ import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.compression.CompressorFactory;
+import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.processing.loading.sort.SortStepRowHandler;
@@ -178,8 +179,9 @@ public class UnsafeSortTempFileChunkHolder implements SortTempChunkHolder {
       if (isSortTempFileCompressionEnabled) {
         this.bufferSize = sortTempFileNoOFRecordsInCompression;
       }
-      stream = new DataInputStream(
-          new BufferedInputStream(new FileInputStream(tempFile), this.fileBufferSize));
+      String compressor = CarbonProperties.getInstance().getSortTempCompressor();
+      stream = FileFactory.getDataInputStream(tempFile.getPath(), FileFactory.FileType.LOCAL,
+          fileBufferSize, compressor);
       this.entryCount = stream.readInt();
       LOGGER.audit("Processing unsafe mode file rows with size : " + entryCount);
       if (prefetch) {
