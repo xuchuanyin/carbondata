@@ -37,7 +37,6 @@ import org.apache.hadoop.io.Writable;
  * class to store the information about the blocklet
  */
 public class BlockletInfo implements Serializable, Writable {
-
   /**
    * serialization id
    */
@@ -205,7 +204,7 @@ public class BlockletInfo implements Serializable, Writable {
     output.writeLong(dimensionOffset);
     output.writeLong(measureOffsets);
     int dsize = dimensionChunkOffsets != null ? dimensionChunkOffsets.size() : 0;
-    output.writeShort(dsize);
+    output.writeInt(dsize);
     for (int i = 0; i < dsize; i++) {
       output.writeLong(dimensionChunkOffsets.get(i));
     }
@@ -268,7 +267,7 @@ public class BlockletInfo implements Serializable, Writable {
   @Override public void readFields(DataInput input) throws IOException {
     dimensionOffset = input.readLong();
     measureOffsets = input.readLong();
-    short dimensionChunkOffsetsSize = input.readShort();
+    int dimensionChunkOffsetsSize = input.readInt();
     dimensionChunkOffsets = new ArrayList<>(dimensionChunkOffsetsSize);
     for (int i = 0; i < dimensionChunkOffsetsSize; i++) {
       dimensionChunkOffsets.add(input.readLong());

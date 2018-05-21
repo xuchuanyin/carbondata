@@ -17,19 +17,30 @@
 
 package org.apache.carbondata.core.datastore.page.statistics;
 
-import java.math.BigDecimal;
+public class LVLongStringStatsCollector extends LVStringStatsCollector {
 
-public interface ColumnPageStatsCollector {
-  void updateNull(int rowId);
-  void update(byte value);
-  void update(short value);
-  void update(int value);
-  void update(long value);
-  void update(double value);
-  void update(BigDecimal value);
-  void update(byte[] value);
-  /**
-   * return the collected statistics
-   */
-  SimpleStatsResult getPageStats();
+  public static LVLongStringStatsCollector newInstance() {
+    return new LVLongStringStatsCollector();
+  }
+
+  private LVLongStringStatsCollector() {
+
+  }
+
+  @Override
+  protected byte[] getActualValue(byte[] value) {
+    byte[] actualValue;
+    assert (value.length >= 4);
+    if (value.length == 4) {
+      assert (value[0] == 0 && value[1] == 0);
+      actualValue = new byte[0];
+    } else {
+      // todo: what does this mean?
+      // int length = (value[0] << 8) + (value[1] & 0xff);
+      // assert (length > 0);
+      actualValue = new byte[value.length - 4];
+      System.arraycopy(value, 4, actualValue, 0, actualValue.length);
+    }
+    return actualValue;
+  }
 }

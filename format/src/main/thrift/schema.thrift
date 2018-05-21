@@ -123,6 +123,7 @@ struct ColumnSchema{
   *  will be usefull in case of pre-aggregate
   **/
 	17: optional list<ParentColumnTableRelation> parentColumnTableRelations;
+	18: optional bool longStringColumn;
 }
 
 /**
@@ -173,6 +174,7 @@ struct TableSchema{
   4: optional map<string,string> tableProperties; // Table properties configured by the user
   5: optional BucketingInfo bucketingInfo; // Bucketing information
   6: optional PartitionInfo partitionInfo; // Partition information
+  7: optional list<string> long_string_columns // long string columns in the table
 }
 
 struct RelationIdentifier {

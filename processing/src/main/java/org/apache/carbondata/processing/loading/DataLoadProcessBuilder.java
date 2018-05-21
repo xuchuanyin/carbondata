@@ -268,6 +268,7 @@ public final class DataLoadProcessBuilder {
     configuration.setDictionaryServiceProvider(loadModel.getDictionaryServiceProvider());
     configuration.setPreFetch(loadModel.isPreFetch());
     configuration.setNumberOfSortColumns(carbonTable.getNumberOfSortColumns());
+    configuration.setDimLongStringColumnCount(carbonTable.getNumberOfLongStringColumns());
     configuration.setNumberOfNoDictSortColumns(carbonTable.getNumberOfNoDictSortColumns());
     configuration.setDataWritePath(loadModel.getDataWritePath());
     setSortColumnInfo(carbonTable, loadModel, configuration);

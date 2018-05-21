@@ -32,13 +32,14 @@ import org.apache.carbondata.core.memory.MemoryException;
  *  by specifying page number.
  */
 public class DimensionRawColumnChunk extends AbstractRawColumnChunk {
-
   private DimensionColumnPage[] dataChunks;
 
   private DimensionColumnChunkReader chunkReader;
 
   private FileReader fileReader;
+  private boolean isLongStringColumn;
 
+  // todo: add isLongStringColumn to constructor
   public DimensionRawColumnChunk(int columnIndex, ByteBuffer rawData, long offSet, int length,
       DimensionColumnChunkReader columnChunkReader) {
     super(columnIndex, rawData, offSet, length);
@@ -92,8 +93,10 @@ public class DimensionRawColumnChunk extends AbstractRawColumnChunk {
    * @param index
    * @return
    */
-  public DimensionColumnPage convertToDimColDataChunkWithOutCache(int index) {
+  public DimensionColumnPage convertToDimColDataChunkWithOutCache(int index,
+      boolean isLongStringColumn) {
     assert index < pagesCount;
+    setLongStringColumn(isLongStringColumn);
     // in case of filter query filter column if filter column is decoded and stored.
     // then return the same
     if (dataChunks != null && null != dataChunks[index]) {
@@ -125,5 +128,13 @@ public class DimensionRawColumnChunk extends AbstractRawColumnChunk {
 
   public FileReader getFileReader() {
     return fileReader;
+  }
+
+  public boolean isLongStringColumn() {
+    return isLongStringColumn;
+  }
+
+  public void setLongStringColumn(boolean longStringColumn) {
+    isLongStringColumn = longStringColumn;
   }
 }

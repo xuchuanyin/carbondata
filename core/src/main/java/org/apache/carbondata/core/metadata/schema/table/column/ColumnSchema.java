@@ -121,7 +121,10 @@ public class ColumnSchema implements Serializable, Writable {
   private boolean invisible = false;
 
   private boolean isSortColumn = false;
-
+  /**
+   * Whether it is a long string column
+   */
+  private boolean isLongStringColumn = false;
   /**
    * aggregate function used in pre aggregate table
    */
@@ -468,6 +471,14 @@ public class ColumnSchema implements Serializable, Writable {
     isSortColumn = sortColumn;
   }
 
+  public boolean isLongStringColumn() {
+    return isLongStringColumn;
+  }
+
+  public void setLongStringColumn(boolean longStringColumn) {
+    isLongStringColumn = longStringColumn;
+  }
+
   public String getAggFunction() {
     return aggFunction;
   }
@@ -534,6 +545,7 @@ public class ColumnSchema implements Serializable, Writable {
         parentColumnTableRelations.get(i).write(out);
       }
     }
+    out.writeBoolean(isLongStringColumn);
   }
 
   @Override
@@ -582,5 +594,6 @@ public class ColumnSchema implements Serializable, Writable {
         parentColumnTableRelations.add(parentColumnTableRelation);
       }
     }
+    this.isLongStringColumn = in.readBoolean();
   }
 }

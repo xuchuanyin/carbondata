@@ -141,7 +141,7 @@ public class CarbonTable implements Serializable {
    * the number of no dictionary columns in SORT_COLUMNS
    */
   private int numberOfNoDictSortColumns;
-
+  private int numberOfLongStringColumns;
   private int dimensionOrdinalMax;
 
   private boolean hasDataMapSchema;
@@ -319,6 +319,9 @@ public class CarbonTable implements Serializable {
         } else {
           if (!columnSchema.isInvisible() && columnSchema.isSortColumn()) {
             this.numberOfSortColumns++;
+          }
+          if (columnSchema.isLongStringColumn()) {
+            this.numberOfLongStringColumns++;
           }
           if (!columnSchema.getEncodingList().contains(Encoding.DICTIONARY)) {
             CarbonDimension dimension = new CarbonDimension(
@@ -816,6 +819,10 @@ public class CarbonTable implements Serializable {
 
   public int getNumberOfNoDictSortColumns() {
     return numberOfNoDictSortColumns;
+  }
+
+  public int getNumberOfLongStringColumns() {
+    return numberOfLongStringColumns;
   }
 
   public TableInfo getTableInfo() {

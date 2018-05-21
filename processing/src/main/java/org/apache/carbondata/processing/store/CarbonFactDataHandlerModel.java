@@ -97,6 +97,10 @@ public class CarbonFactDataHandlerModel {
    */
   private int dimensionCount;
   /**
+   * total number of long_string dimension
+   */
+  private int longStringCount;
+  /**
    * map which maintains indexing of complex columns
    */
   private Map<Integer, GenericDataType> complexIndexMap;
@@ -238,6 +242,7 @@ public class CarbonFactDataHandlerModel {
     carbonFactDataHandlerModel.setStoreLocation(storeLocation);
     carbonFactDataHandlerModel.setDimLens(dimLens);
     carbonFactDataHandlerModel.setNoDictionaryCount(noDictionaryCount);
+    carbonFactDataHandlerModel.setLongStringCount(configuration.getDimLongStringColumnCount());
     carbonFactDataHandlerModel.setDimensionCount(
         configuration.getDimensionCount() - noDictionaryCount);
     carbonFactDataHandlerModel.setComplexIndexMap(complexIndexMap);
@@ -292,6 +297,7 @@ public class CarbonFactDataHandlerModel {
     carbonFactDataHandlerModel.setSegmentProperties(segmentProperties);
     carbonFactDataHandlerModel
         .setNoDictionaryCount(segmentProperties.getNumberOfNoDictionaryDimension());
+    carbonFactDataHandlerModel.setLongStringCount(segmentProperties.getNumberOfLongStringColumns());
     carbonFactDataHandlerModel.setDimensionCount(
         segmentProperties.getDimensions().size() - carbonFactDataHandlerModel
             .getNoDictionaryCount());
@@ -448,6 +454,14 @@ public class CarbonFactDataHandlerModel {
 
   public void setNoDictionaryCount(int noDictionaryCount) {
     this.noDictionaryCount = noDictionaryCount;
+  }
+
+  public int getLongStringCount() {
+    return longStringCount;
+  }
+
+  public void setLongStringCount(int longStringCount) {
+    this.longStringCount = longStringCount;
   }
 
   public int getDimensionCount() {

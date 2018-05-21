@@ -38,6 +38,7 @@ import org.apache.carbondata.core.mutate.TupleIdEnum;
 import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
 import org.apache.carbondata.core.scan.executor.infos.KeyStructureInfo;
 import org.apache.carbondata.core.scan.filter.GenericQueryType;
+import org.apache.carbondata.core.scan.model.ProjectionDimension;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnarBatch;
 import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
@@ -121,7 +122,10 @@ public abstract class BlockletScannedResult {
   private Map<Integer, GenericQueryType> complexParentIndexToQueryMap;
 
   private int totalDimensionsSize;
-
+  /**
+   * number of long string dimensions in projection
+   */
+  private int totalLongStringDimSize;
   /**
    * blockedId which will be blockId + blocklet number in the block
    */
@@ -163,6 +167,12 @@ public abstract class BlockletScannedResult {
     this.deletedRecordMap = blockExecutionInfo.getDeletedRecordsMap();
     this.queryStatisticsModel = queryStatisticsModel;
     validRowIds = new ArrayList<>(CarbonCommonConstants.DEFAULT_COLLECTION_SIZE);
+    for (ProjectionDimension dimension : blockExecutionInfo.getProjectionDimensions()) {
+      if (dimension.getDimension().getColumnSchema() != null
+          && dimension.getDimension().getColumnSchema().isLongStringColumn()) {
+        this.totalLongStringDimSize++;
+      }
+    }
   }
 
   /**
@@ -369,8 +379,10 @@ public abstract class BlockletScannedResult {
     long startTime = System.currentTimeMillis();
     for (int i = 0; i < dimensionColumnPages.length; i++) {
       if (dimensionColumnPages[i][pageCounter] == null && dimRawColumnChunks[i] != null) {
+        // the long string columns is at the end
         dimensionColumnPages[i][pageCounter] =
-            dimRawColumnChunks[i].convertToDimColDataChunkWithOutCache(pageCounter);
+            dimRawColumnChunks[i].convertToDimColDataChunkWithOutCache(pageCounter,
+                i >= dimensionColumnPages.length - totalLongStringDimSize);
       }
     }
 

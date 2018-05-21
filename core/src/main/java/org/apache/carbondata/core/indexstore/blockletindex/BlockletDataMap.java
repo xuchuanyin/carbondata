@@ -607,7 +607,9 @@ public class BlockletDataMap extends CoarseGrainDataMap implements Serializable 
       CarbonRowSchema[] mapSchemas = new CarbonRowSchema[minMaxLen.length];
       for (int i = 0; i < minMaxLen.length; i++) {
         if (minMaxLen[i] <= 0) {
-          mapSchemas[i] = new CarbonRowSchema.VariableCarbonRowSchema(DataTypes.BYTE_ARRAY);
+          mapSchemas[i] = new CarbonRowSchema.VariableCarbonRowSchema(DataTypes.BYTE_ARRAY,
+              i >= segmentProperties.getDimensions().size()
+                  - segmentProperties.getNumberOfLongStringColumns());
         } else {
           mapSchemas[i] =
               new CarbonRowSchema.FixedCarbonRowSchema(DataTypes.BYTE_ARRAY, minMaxLen[i]);

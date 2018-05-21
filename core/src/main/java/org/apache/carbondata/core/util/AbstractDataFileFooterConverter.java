@@ -50,7 +50,6 @@ import org.apache.carbondata.format.BlockIndex;
  * Footer reader class
  */
 public abstract class AbstractDataFileFooterConverter {
-
   /**
    * Below method will be used to convert the thrift presence meta to wrapper
    * presence meta
@@ -314,6 +313,7 @@ public abstract class AbstractDataFileFooterConverter {
         wrapperColumnSchema.setSortColumn(true);
       }
     }
+    wrapperColumnSchema.setLongStringColumn(externalColumnSchema.isLongStringColumn());
     wrapperColumnSchema.setFunction(externalColumnSchema.getAggregate_function());
     List<org.apache.carbondata.format.ParentColumnTableRelation> parentColumnTableRelation =
         externalColumnSchema.getParentColumnTableRelations();

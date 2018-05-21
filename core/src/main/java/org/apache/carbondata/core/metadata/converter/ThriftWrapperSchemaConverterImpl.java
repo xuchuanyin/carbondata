@@ -199,6 +199,7 @@ public class ThriftWrapperSchemaConverterImpl implements SchemaConverter {
       }
       properties.put(CarbonCommonConstants.SORT_COLUMNS, "true");
     }
+    thriftColumnSchema.setLongStringColumn(wrapperColumnSchema.isLongStringColumn());
     if (null != wrapperColumnSchema.getAggFunction() && !wrapperColumnSchema.getAggFunction()
         .isEmpty()) {
       thriftColumnSchema.setAggregate_function(wrapperColumnSchema.getAggFunction());
@@ -530,6 +531,7 @@ public class ThriftWrapperSchemaConverterImpl implements SchemaConverter {
         wrapperColumnSchema.setSortColumn(true);
       }
     }
+    wrapperColumnSchema.setLongStringColumn(externalColumnSchema.isLongStringColumn());
     wrapperColumnSchema.setFunction(externalColumnSchema.getAggregate_function());
     List<org.apache.carbondata.format.ParentColumnTableRelation> parentColumnTableRelation =
         externalColumnSchema.getParentColumnTableRelations();

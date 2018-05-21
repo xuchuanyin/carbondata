@@ -55,6 +55,7 @@ case class TableModel(
     dimCols: Seq[Field],
     msrCols: Seq[Field],
     sortKeyDims: Option[Seq[String]],
+    longStringCols: Option[Seq[String]],
     highcardinalitydims: Option[Seq[String]],
     noInvertedIdxCols: Option[Seq[String]],
     columnGroups: Seq[String],
@@ -223,6 +224,16 @@ class AlterTableColumnSchemaGenerator(
       true
     }
   }
+
+  def isLongStringColumn(columnName: String): Boolean = {
+    val longStringColumns = alterTableModel.tableProperties.get("long_string_columns")
+    if (longStringColumns.isDefined) {
+      longStringColumns.get.contains(columnName)
+    } else {
+      false
+    }
+  }
+
   def process: Seq[ColumnSchema] = {
     val tableSchema = tableInfo.getFactTable
     val tableCols = tableSchema.getListOfColumns.asScala
@@ -242,7 +253,8 @@ class AlterTableColumnSchemaGenerator(
         field.schemaOrdinal + existingColsSize,
         alterTableModel.highCardinalityDims,
         alterTableModel.databaseName.getOrElse(dbName),
-        isSortColumn(field.name.getOrElse(field.column)))
+        isSortColumn(field.name.getOrElse(field.column)),
+        isLongStringColumn(field.name.getOrElse(field.column)))
       allColumns ++= Seq(columnSchema)
       newCols ++= Seq(columnSchema)
     })
@@ -351,7 +363,8 @@ object TableNewProcessor {
       schemaOrdinal: Int,
       highCardinalityDims: Seq[String],
       databaseName: String,
-      isSortColumn: Boolean = false): ColumnSchema = {
+      isSortColumn: Boolean = false,
+      isLongStringColumn: Boolean = false): ColumnSchema = {
     val dataType = DataTypeConverterUtil.convertToCarbonType(field.dataType.getOrElse(""))
     if (DataTypes.isDecimal(dataType)) {
       dataType.asInstanceOf[DecimalType].setPrecision(field.precision)
@@ -382,6 +395,7 @@ object TableNewProcessor {
     columnSchema.setSchemaOrdinal(schemaOrdinal)
     columnSchema.setUseInvertedIndex(isDimensionCol)
     columnSchema.setSortColumn(isSortColumn)
+    columnSchema.setLongStringColumn(isLongStringColumn)
     columnSchema
   }
 }
@@ -404,6 +418,7 @@ class TableNewProcessor(cm: TableModel) {
           true,
           field,
           cm.dataMapRelation,
+          cm.longStringCols.get,
           useDictionaryEncoding = useDictionaryEncoding)
         allColumns ++= Seq(columnSchema)
         if (field.children.get != null) {
@@ -422,6 +437,7 @@ class TableNewProcessor(cm: TableModel) {
       isDimensionCol: Boolean,
       field: Field,
       map: Option[scala.collection.mutable.LinkedHashMap[Field, DataMapField]],
+      longStringColumns: Seq[String],
       useDictionaryEncoding: Boolean = true) : ColumnSchema = {
     val columnSchema = new ColumnSchema()
     columnSchema.setDataType(dataType)
@@ -450,6 +466,9 @@ class TableNewProcessor(cm: TableModel) {
     columnSchema.setScale(field.scale)
     columnSchema.setSchemaOrdinal(field.schemaOrdinal)
     columnSchema.setSortColumn(false)
+    if (longStringColumns.contains(colName)) {
+      columnSchema.setLongStringColumn(true)
+    }
     if(isParentColumnRelation) {
       val dataMapField = map.get.get(field).get
       columnSchema.setFunction(dataMapField.aggregateFunction)
@@ -508,7 +527,8 @@ class TableNewProcessor(cm: TableModel) {
         encoders,
         true,
         field,
-        cm.dataMapRelation)
+        cm.dataMapRelation,
+        cm.longStringCols.get)
       columnSchema.setSortColumn(true)
       allColumns :+= columnSchema
       index = index + 1
@@ -517,7 +537,7 @@ class TableNewProcessor(cm: TableModel) {
     val dictionaryIncludeCols = cm.tableProperties
       .getOrElse(CarbonCommonConstants.DICTIONARY_INCLUDE, "")
 
-    cm.dimCols.foreach { field =>
+    def addDimensionCol(field: Field): Unit = {
       val sortField = cm.sortKeyDims.get.find(field.column equals _)
       if (sortField.isEmpty) {
         val encoders = if (getEncoderFromParent(field)) {
@@ -536,7 +556,8 @@ class TableNewProcessor(cm: TableModel) {
           encoders,
           true,
           field,
-          cm.dataMapRelation)
+          cm.dataMapRelation,
+          cm.longStringCols.get)
         allColumns :+= columnSchema
         index = index + 1
         if (field.children.isDefined && field.children.get != null) {
@@ -549,6 +570,12 @@ class TableNewProcessor(cm: TableModel) {
         }
       }
     }
+    // dimensions that are not long_string
+    cm.dimCols.filter(field => !cm.longStringCols.get.contains(field.column))
+      .foreach(addDimensionCol(_))
+    // dimensions that are long_string
+    cm.dimCols.filter(field => cm.longStringCols.get.contains(field.column))
+      .foreach(addDimensionCol(_))
 
     cm.msrCols.foreach { field =>
       // if aggregate function is defined in case of preaggregate and agg function is sum or avg
@@ -580,7 +607,8 @@ class TableNewProcessor(cm: TableModel) {
         encoders,
         isDimColumn,
         field,
-        cm.dataMapRelation)
+        cm.dataMapRelation,
+        cm.longStringCols.get)
       allColumns :+= columnSchema
       index = index + 1
       if (!isDimColumn) {
@@ -638,7 +666,8 @@ class TableNewProcessor(cm: TableModel) {
         encoders,
         false,
         field,
-        cm.dataMapRelation)
+        cm.dataMapRelation,
+        cm.longStringCols.get)
       columnSchema.setInvisible(true)
       allColumns :+= columnSchema
     }

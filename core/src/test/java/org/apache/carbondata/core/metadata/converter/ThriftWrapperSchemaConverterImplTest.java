@@ -84,6 +84,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     thriftColumnSchemas = new ArrayList<org.apache.carbondata.format.ColumnSchema>();
     thriftColumnSchemas.add(thriftColumnSchema);
     thriftSchemaEvolutionEntries = new ArrayList<>();
@@ -213,7 +214,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
-
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     final Map mapTableProperties = new HashMap<String, String>();
@@ -422,6 +425,7 @@ public class ThriftWrapperSchemaConverterImplTest {
                     "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
 
     new MockUp<ColumnSchema>() {
@@ -486,6 +490,10 @@ public class ThriftWrapperSchemaConverterImplTest {
       }
 
       @Mock public String getAggFunction() {return "" ;}
+
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     org.apache.carbondata.format.ColumnSchema actualResult =
@@ -500,6 +508,8 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
+
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -560,6 +570,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -575,6 +588,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -635,6 +649,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -649,6 +666,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -709,6 +727,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -723,6 +744,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -783,6 +805,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -797,6 +822,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
 
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
@@ -858,6 +884,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -872,6 +901,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -936,6 +966,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getAggFunction() {
         return "";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -951,7 +984,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
-
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -1012,6 +1045,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -1026,6 +1062,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -1086,6 +1123,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -1100,7 +1140,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
-
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -1161,6 +1201,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
@@ -1181,7 +1224,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
-
+    thriftColumnSchema.setLongStringColumn(false);
     new MockUp<ColumnSchema>() {
       @Mock public List<Encoding> getEncodingList() {
         return encodings;
@@ -1241,6 +1284,9 @@ public class ThriftWrapperSchemaConverterImplTest {
 
       @Mock public String getColumnReferenceId() {
         return "1";
+      }
+      @Mock public boolean isLongStringColumn() {
+        return false;
       }
     };
 
@@ -1316,6 +1362,9 @@ public class ThriftWrapperSchemaConverterImplTest {
       @Mock public String getColumnReferenceId() {
         return "1";
       }
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     List<Encoding> encodings = null;
@@ -1332,6 +1381,7 @@ public class ThriftWrapperSchemaConverterImplTest {
             "columnName", "1", true, encoders, true);
     thriftColumnSchema.setSchemaOrdinal(1);
     thriftColumnSchema.setAggregate_function("");
+    thriftColumnSchema.setLongStringColumn(false);
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
     org.apache.carbondata.format.ColumnSchema actualResult =
         thriftWrapperSchemaConverter.fromWrapperToExternalColumnSchema(wrapperColumnSchema);
@@ -1400,6 +1450,9 @@ public class ThriftWrapperSchemaConverterImplTest {
 
       @Mock public String getColumnReferenceId() {
         return "1";
+      }
+      @Mock public boolean isLongStringColumn() {
+        return false;
       }
     };
 
@@ -1521,6 +1574,10 @@ public class ThriftWrapperSchemaConverterImplTest {
       }
 
       @Mock public String getAggFunction() { return "";}
+
+      @Mock public boolean isLongStringColumn() {
+        return false;
+      }
     };
 
     new MockUp<TableInfo>() {
@@ -1562,7 +1619,7 @@ public class ThriftWrapperSchemaConverterImplTest {
   }
 
   @Test public void testFromExternalToWrapperSchemaEvolutionEntry() {
-long time =1112745600000L;
+    long time =1112745600000L;
     ColumnSchema wrapperColumnSchema = new ColumnSchema();
     wrapperColumnSchema.setColumnUniqueId("1");
     wrapperColumnSchema.setColumnName("columnName");

@@ -33,9 +33,13 @@ public class TableFieldStat implements Serializable {
   private int dictSortDimCnt = 0;
   private int dictNoSortDimCnt = 0;
   private int noDictSortDimCnt = 0;
+  // for columns that are no_dict_dim and no_sort_dim and complex, except the long_string_column
   private int noDictNoSortDimCnt = 0;
+  // for columns that are long_string data type
+  private int longStringDimCnt = 0;
   // whether sort column is of dictionary type or not
   private boolean[] isSortColNoDictFlags;
+  private boolean[] isLongStringDimFlags;
   private int measureCnt;
   private DataType[] measureDataType;
 
@@ -47,6 +51,7 @@ public class TableFieldStat implements Serializable {
   private int[] noDictSortDimIdx;
   // indices for no-dict & no-sort dimension columns, including complex columns
   private int[] noDictNoSortDimIdx;
+  private int[] longStringDimIdx;
   // indices for measure columns
   private int[] measureIdx;
 
@@ -55,6 +60,7 @@ public class TableFieldStat implements Serializable {
     int complexDimCnt = sortParameters.getComplexDimColCount();
     int dictDimCnt = sortParameters.getDimColCount() - noDictDimCnt;
     this.isSortColNoDictFlags = sortParameters.getNoDictionarySortColumn();
+    this.isLongStringDimFlags = sortParameters.getIsLongStringDimensionColumn();
     int sortColCnt = isSortColNoDictFlags.length;
     for (boolean flag : isSortColNoDictFlags) {
       if (flag) {
@@ -66,22 +72,33 @@ public class TableFieldStat implements Serializable {
     this.measureCnt = sortParameters.getMeasureColCount();
     this.measureDataType = sortParameters.getMeasureDataType();
 
+    for (boolean flag : isLongStringDimFlags) {
+      if (flag) {
+        longStringDimCnt++;
+      }
+    }
+
     // be careful that the default value is 0
     this.dictSortDimIdx = new int[dictSortDimCnt];
     this.dictNoSortDimIdx = new int[dictDimCnt - dictSortDimCnt];
     this.noDictSortDimIdx = new int[noDictSortDimCnt];
-    this.noDictNoSortDimIdx = new int[noDictDimCnt + complexDimCnt - noDictSortDimCnt];
+    this.noDictNoSortDimIdx = new int[noDictDimCnt + complexDimCnt - noDictSortDimCnt
+        - longStringDimCnt];
+    this.longStringDimIdx = new int[longStringDimCnt];
     this.measureIdx = new int[measureCnt];
 
     int tmpNoDictSortCnt = 0;
     int tmpNoDictNoSortCnt = 0;
     int tmpDictSortCnt = 0;
     int tmpDictNoSortCnt = 0;
+    int tmpLongStringCnt = 0;
     boolean[] isDimNoDictFlags = sortParameters.getNoDictionaryDimnesionColumn();
 
     for (int i = 0; i < isDimNoDictFlags.length; i++) {
       if (isDimNoDictFlags[i]) {
-        if (i < sortColCnt && isSortColNoDictFlags[i]) {
+        if (isLongStringDimFlags[i]) {
+          longStringDimIdx[tmpLongStringCnt++] = i;
+        } else if (i < sortColCnt && isSortColNoDictFlags[i]) {
           noDictSortDimIdx[tmpNoDictSortCnt++] = i;
         } else {
           noDictNoSortDimIdx[tmpNoDictNoSortCnt++] = i;
@@ -126,8 +143,16 @@ public class TableFieldStat implements Serializable {
     return noDictNoSortDimCnt;
   }
 
+  public int getLongStringDimCnt() {
+    return longStringDimCnt;
+  }
+
   public boolean[] getIsSortColNoDictFlags() {
     return isSortColNoDictFlags;
+  }
+
+  public boolean[] getIsLongStringDimFlags() {
+    return isLongStringDimFlags;
   }
 
   public int getMeasureCnt() {
@@ -154,6 +179,10 @@ public class TableFieldStat implements Serializable {
     return noDictNoSortDimIdx;
   }
 
+  public int[] getLongStringDimIdx() {
+    return longStringDimIdx;
+  }
+
   public int[] getMeasureIdx() {
     return measureIdx;
   }
@@ -166,11 +195,12 @@ public class TableFieldStat implements Serializable {
         && dictNoSortDimCnt == that.dictNoSortDimCnt
         && noDictSortDimCnt == that.noDictSortDimCnt
         && noDictNoSortDimCnt == that.noDictNoSortDimCnt
+        && longStringDimCnt == that.longStringDimCnt
         && measureCnt == that.measureCnt;
   }
 
   @Override public int hashCode() {
     return Objects.hash(dictSortDimCnt, dictNoSortDimCnt, noDictSortDimCnt,
-        noDictNoSortDimCnt, measureCnt);
+        noDictNoSortDimCnt, longStringDimCnt, measureCnt);
   }
 }

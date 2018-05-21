@@ -223,6 +223,28 @@ public final class CarbonDataProcessorUtil {
         .toPrimitive(noDictionaryMapping.toArray(new Boolean[noDictionaryMapping.size()]));
   }
 
+  /**
+   * Preparing the boolean [] to map whether the dimension is long_string data type or not.
+   */
+  public static boolean[] getIsLongStringColumnMapping(DataField[] fields) {
+    List<Boolean> isLongStringColumnMapping = new ArrayList<Boolean>();
+    for (DataField field : fields) {
+      // for complex type need to break the loop
+      if (field.getColumn().isComplex()) {
+        break;
+      }
+
+      if (field.getColumn().getColumnSchema().isLongStringColumn()
+          && field.getColumn().isDimension()) {
+        isLongStringColumnMapping.add(true);
+      } else if (field.getColumn().isDimension()) {
+        isLongStringColumnMapping.add(false);
+      }
+    }
+    return ArrayUtils.toPrimitive(
+        isLongStringColumnMapping.toArray(new Boolean[isLongStringColumnMapping.size()]));
+  }
+
   public static boolean[] getNoDictionaryMapping(CarbonColumn[] carbonColumns) {
     List<Boolean> noDictionaryMapping = new ArrayList<Boolean>();
     for (CarbonColumn column : carbonColumns) {

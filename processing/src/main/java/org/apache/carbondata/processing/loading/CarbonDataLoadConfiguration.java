@@ -90,7 +90,7 @@ public class CarbonDataLoadConfiguration {
   private int complexDictionaryColumnCount;
 
   private int complexNonDictionaryColumnCount;
-
+  private int dimLongStringColumnCount;
   /**
    * schema updated time stamp to be used for restructure scenarios
    */
@@ -161,6 +161,14 @@ public class CarbonDataLoadConfiguration {
 
   public int getComplexDictionaryColumnCount() {
     return complexDictionaryColumnCount;
+  }
+
+  public int getDimLongStringColumnCount() {
+    return dimLongStringColumnCount;
+  }
+
+  public void setDimLongStringColumnCount(int dimLongStringColumnCount) {
+    this.dimLongStringColumnCount = dimLongStringColumnCount;
   }
 
   public int getMeasureCount() {
