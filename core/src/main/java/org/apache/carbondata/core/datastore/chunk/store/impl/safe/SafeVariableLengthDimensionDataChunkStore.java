@@ -91,8 +91,8 @@ public abstract class SafeVariableLengthDimensionDataChunkStore
     }
   }
 
-  abstract protected int getLengthSize();
-  abstract protected int getLengthFromBuffer(ByteBuffer buffer);
+  protected abstract int getLengthSize();
+  protected abstract int getLengthFromBuffer(ByteBuffer buffer);
 
   @Override
   public byte[] getRow(int rowId) {

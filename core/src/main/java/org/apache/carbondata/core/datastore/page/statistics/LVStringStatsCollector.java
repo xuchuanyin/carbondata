@@ -62,7 +62,7 @@ public abstract class LVStringStatsCollector implements ColumnPageStatsCollector
 
   }
 
-  abstract protected byte[] getActualValue(byte[] value);
+  protected abstract byte[] getActualValue(byte[] value);
 
   @Override
   public void update(byte[] value) {
