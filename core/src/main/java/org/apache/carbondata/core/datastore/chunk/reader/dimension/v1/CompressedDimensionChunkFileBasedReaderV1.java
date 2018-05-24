@@ -99,7 +99,6 @@ public class CompressedDimensionChunkFileBasedReaderV1 extends AbstractChunkRead
 
   @Override public DimensionColumnPage decodeColumnPage(
       DimensionRawColumnChunk dimensionRawColumnChunk, int pageNumber) throws IOException {
-    boolean isLongStringColumn = dimensionRawColumnChunk.isLongStringColumn();
     int blockIndex = dimensionRawColumnChunk.getColumnIndex();
     byte[] dataPage = null;
     int[] invertedIndexes = new int[0];
@@ -152,7 +151,7 @@ public class CompressedDimensionChunkFileBasedReaderV1 extends AbstractChunkRead
         .hasEncoding(dataChunk.getEncodingList(), Encoding.DICTIONARY)) {
       columnDataChunk =
           new VariableLengthDimensionColumnPage(dataPage, invertedIndexes, invertedIndexesReverse,
-              numberOfRows, isLongStringColumn);
+              numberOfRows, false);
     } else {
       // to store fixed length column chunk values
       columnDataChunk =

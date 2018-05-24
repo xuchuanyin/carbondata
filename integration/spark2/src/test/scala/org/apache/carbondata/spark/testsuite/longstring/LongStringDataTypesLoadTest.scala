@@ -33,11 +33,14 @@ class LongStringDataTypesLoadTest extends QueryTest with BeforeAndAfterEach with
   private val inputFile = s"$inputDir$fileName"
   private val lineNum = 1000
   private val head = 0
-  private var line_head: String = _
   private val mid = lineNum / 2
-  private var line_half: String = _
   private var tail = lineNum - 1
-  private var line_tail: String = _
+  private var desc_line_head: String = _
+  private var desc_line_half: String = _
+  private var desc_line_tail: String = _
+  private var note_line_head: String = _
+  private var note_line_half: String = _
+  private var note_line_tail: String = _
 
   override def beforeAll(): Unit = {
     deleteFile(inputFile)
@@ -62,27 +65,48 @@ class LongStringDataTypesLoadTest extends QueryTest with BeforeAndAfterEach with
     sql(s"drop table if exists $longStringTable")
   }
 
-  test("Load file to table with long string datatype: safe") {
-    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_UNSAFE_SORT, "false")
-    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "false")
+  private def prepareTable(): Unit = {
     sql(
       s"""
          | CREATE TABLE if not exists $longStringTable(
-         | id INT, name STRING, description STRING, address STRING
+         | id INT, name STRING, description STRING, address STRING, note STRING
          | ) STORED BY 'carbondata'
-         | TBLPROPERTIES('LONG_STRING_COLUMNS'='description', 'SORT_COLUMNS'='name')
+         | TBLPROPERTIES('LONG_STRING_COLUMNS'='description, note', 'SORT_COLUMNS'='name')
          |""".stripMargin)
     sql(
       s"""
          | LOAD DATA LOCAL INPATH '$inputFile' INTO TABLE $longStringTable
          | OPTIONS('header'='false')
        """.stripMargin)
+  }
+  private def checkQuery(): Unit = {
+    // query without long_string_column
+    checkAnswer(sql(s"SELECT id, name, address FROM $longStringTable where id = $tail"),
+      Row(tail, s"name_$tail", s"address_$tail"))
+    // query return long_string_column in the middle position
     checkAnswer(sql(s"SELECT id, name, description, address FROM $longStringTable where id = $head"),
-      Row(head, s"name_$head", line_head, s"address_$head"))
-    checkAnswer(sql(s"SELECT id, name, description, address FROM $longStringTable where id = $mid"),
-      Row(mid, s"name_$mid", line_half, s"address_$mid"))
-    checkAnswer(sql(s"SELECT id, name, description, address FROM $longStringTable where id = $tail"),
-      Row(tail, s"name_$tail", line_tail, s"address_$tail"))
+      Row(head, s"name_$head", desc_line_head, s"address_$head"))
+    // query return long_string_column at last position
+    checkAnswer(sql(s"SELECT id, name, address, description FROM $longStringTable where id = $mid"),
+      Row(mid, s"name_$mid", s"address_$mid", desc_line_half))
+    // query return 2 long_string_columns
+    checkAnswer(sql(s"SELECT id, name, note, address, description FROM $longStringTable where id = $mid"),
+      Row(mid, s"name_$mid", note_line_half, s"address_$mid", desc_line_half))
+    // query by simple string column
+    checkAnswer(sql(s"SELECT id, note, address, description FROM $longStringTable where name = 'name_$tail'"),
+      Row(tail, note_line_tail, s"address_$tail", desc_line_tail))
+    // query by long string column
+    checkAnswer(sql(s"SELECT id, name, address, description FROM $longStringTable where note = '$note_line_tail'"),
+      Row(tail, s"name_$tail", s"address_$tail", desc_line_tail))
+  }
+
+  test("Load file to table with long string datatype: safe") {
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_UNSAFE_SORT, "false")
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "false")
+
+    prepareTable()
+    checkQuery()
+
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_UNSAFE_SORT,
       CarbonCommonConstants.ENABLE_UNSAFE_SORT_DEFAULT)
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT,
@@ -92,42 +116,33 @@ class LongStringDataTypesLoadTest extends QueryTest with BeforeAndAfterEach with
   test("Load file to table with long string datatype: unsafe") {
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_UNSAFE_SORT, "false")
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT, "false")
-    sql(
-      s"""
-         | CREATE TABLE if not exists $longStringTable(
-         | id INT, name STRING, description STRING, address STRING
-         | ) STORED BY 'carbondata'
-         | TBLPROPERTIES('LONG_STRING_COLUMNS'='description', 'SORT_COLUMNS'='name')
-         |""".stripMargin)
-    sql(
-      s"""
-         | LOAD DATA LOCAL INPATH '$inputFile' INTO TABLE $longStringTable
-         | OPTIONS('header'='false')
-       """.stripMargin)
-    checkAnswer(sql(s"SELECT id, name, description, address FROM $longStringTable where id = $head"),
-      Row(head, s"name_$head", line_head, s"address_$head"))
-    checkAnswer(sql(s"SELECT id, name, description, address FROM $longStringTable where id = $mid"),
-      Row(mid, s"name_$mid", line_half, s"address_$mid"))
-    checkAnswer(sql(s"SELECT id, name, description, address FROM $longStringTable where id = $tail"),
-      Row(tail, s"name_$tail", line_tail, s"address_$tail"))
+
+    prepareTable()
+    checkQuery()
+
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_UNSAFE_SORT,
       CarbonCommonConstants.ENABLE_UNSAFE_SORT_DEFAULT)
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_OFFHEAP_SORT,
       CarbonCommonConstants.ENABLE_OFFHEAP_SORT_DEFAULT)
   }
 
+
   private def createFile(filePath: String, line: Int = 10000, start: Int = 0): Unit = {
     if (!new File(filePath).exists()) {
       val write = new PrintWriter(new File(filePath))
       for (i <- start until (start + line)) {
         val description = RandomStringUtils.randomAlphabetic(Short.MaxValue + 1000)
-        val line = s"$i,name_$i,$description,address_$i"
+        val note = RandomStringUtils.randomAlphabetic(Short.MaxValue + 1000)
+        val line = s"$i,name_$i,$description,address_$i,$note"
         if (head == i) {
-          line_head = description
+          desc_line_head = description
+          note_line_head = note
         } else if (mid == i) {
-          line_half = description
+          desc_line_half = description
+          note_line_half = note
         } else if (tail == i) {
-          line_tail = description
+          desc_line_tail = description
+          note_line_tail = note
         }
         write.println(line)
       }

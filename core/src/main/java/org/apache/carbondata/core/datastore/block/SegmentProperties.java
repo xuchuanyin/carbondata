@@ -859,34 +859,4 @@ public class SegmentProperties {
   public int getLastDimensionColOrdinal() {
     return lastDimensionColOrdinal;
   }
-
-  @Override public String toString() {
-    final StringBuilder sb = new StringBuilder("SegmentProperties{");
-    sb.append("dimensionKeyGenerator=").append(dimensionKeyGenerator);
-    sb.append(", sortColumnsGenerator=").append(sortColumnsGenerator);
-    sb.append(", dimensions=").append(dimensions);
-    sb.append(", complexDimensions=").append(complexDimensions);
-    sb.append(", measures=").append(measures);
-    sb.append(", dimColumnsCardinality=").append(Arrays.toString(dimColumnsCardinality));
-    sb.append(", dimensionPartitions=").append(Arrays.toString(dimensionPartitions));
-    sb.append(", complexDimColumnCardinality=")
-        .append(Arrays.toString(complexDimColumnCardinality));
-    sb.append(", dimensionOrdinalToChunkMapping=").append(dimensionOrdinalToChunkMapping);
-    sb.append(", blockTodimensionOrdinalMapping=").append(blockTodimensionOrdinalMapping);
-    sb.append(", measuresOrdinalToChunkMapping=").append(measuresOrdinalToChunkMapping);
-    sb.append(", eachDimColumnValueSize=").append(Arrays.toString(eachDimColumnValueSize));
-    sb.append(", eachComplexDimColumnValueSize=")
-        .append(Arrays.toString(eachComplexDimColumnValueSize));
-    sb.append(", columnGroupAndItsKeygenartor=").append(columnGroupAndItsKeygenartor);
-    sb.append(", columnGroupOrdinalToMdkeymapping=").append(columnGroupOrdinalToMdkeymapping);
-    sb.append(", fixedLengthKeySplitter=").append(fixedLengthKeySplitter);
-    sb.append(", numberOfNoDictionaryDimension=").append(numberOfNoDictionaryDimension);
-    sb.append(", colGroupModel=").append(colGroupModel);
-    sb.append(", numberOfSortColumns=").append(numberOfSortColumns);
-    sb.append(", numberOfNoDictSortColumns=").append(numberOfNoDictSortColumns);
-    sb.append(", numberOfLongStringColumns=").append(numberOfLongStringColumns);
-    sb.append(", lastDimensionColOrdinal=").append(lastDimensionColOrdinal);
-    sb.append('}');
-    return sb.toString();
-  }
 }

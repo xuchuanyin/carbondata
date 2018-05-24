@@ -39,7 +39,6 @@ public class DimensionRawColumnChunk extends AbstractRawColumnChunk {
   private FileReader fileReader;
   private boolean isLongStringColumn;
 
-  // todo: add isLongStringColumn to constructor
   public DimensionRawColumnChunk(int columnIndex, ByteBuffer rawData, long offSet, int length,
       DimensionColumnChunkReader columnChunkReader) {
     super(columnIndex, rawData, offSet, length);
@@ -93,10 +92,8 @@ public class DimensionRawColumnChunk extends AbstractRawColumnChunk {
    * @param index
    * @return
    */
-  public DimensionColumnPage convertToDimColDataChunkWithOutCache(int index,
-      boolean isLongStringColumn) {
+  public DimensionColumnPage convertToDimColDataChunkWithOutCache(int index) {
     assert index < pagesCount;
-    setLongStringColumn(isLongStringColumn);
     // in case of filter query filter column if filter column is decoded and stored.
     // then return the same
     if (dataChunks != null && null != dataChunks[index]) {

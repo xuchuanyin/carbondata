@@ -65,7 +65,10 @@ public class BlockExecutionInfo {
    * total number of dimension in block
    */
   private int totalNumberDimensionToRead;
-
+  /**
+   * total number of long string dimension in block
+   */
+  private int totalNumberLongStringDimensionToRead;
   /**
    * total number of measure in block
    */
@@ -282,6 +285,14 @@ public class BlockExecutionInfo {
    */
   public void setTotalNumberDimensionToRead(int totalNumberDimensionToRead) {
     this.totalNumberDimensionToRead = totalNumberDimensionToRead;
+  }
+
+  public int getTotalNumberLongStringDimensionToRead() {
+    return totalNumberLongStringDimensionToRead;
+  }
+
+  public void setTotalNumberLongStringDimensionToRead(int totalNumberLongStringDimensionToRead) {
+    this.totalNumberLongStringDimensionToRead = totalNumberLongStringDimensionToRead;
   }
 
   /**

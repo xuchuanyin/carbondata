@@ -123,9 +123,9 @@ public abstract class BlockletScannedResult {
 
   private int totalDimensionsSize;
   /**
-   * number of long string dimensions in projection
+   * number of short string dimensions (not long string dimensions) in the block.
    */
-  private int totalLongStringDimSize;
+  private int totalShortStringDimSize;
   /**
    * blockedId which will be blockId + blocklet number in the block
    */
@@ -167,12 +167,8 @@ public abstract class BlockletScannedResult {
     this.deletedRecordMap = blockExecutionInfo.getDeletedRecordsMap();
     this.queryStatisticsModel = queryStatisticsModel;
     validRowIds = new ArrayList<>(CarbonCommonConstants.DEFAULT_COLLECTION_SIZE);
-    for (ProjectionDimension dimension : blockExecutionInfo.getProjectionDimensions()) {
-      if (dimension.getDimension().getColumnSchema() != null
-          && dimension.getDimension().getColumnSchema().isLongStringColumn()) {
-        this.totalLongStringDimSize++;
-      }
-    }
+    this.totalShortStringDimSize = blockExecutionInfo.getTotalNumberDimensionToRead()
+        - blockExecutionInfo.getTotalNumberLongStringDimensionToRead();
   }
 
   /**
@@ -379,10 +375,9 @@ public abstract class BlockletScannedResult {
     long startTime = System.currentTimeMillis();
     for (int i = 0; i < dimensionColumnPages.length; i++) {
       if (dimensionColumnPages[i][pageCounter] == null && dimRawColumnChunks[i] != null) {
-        // the long string columns is at the end
+        dimRawColumnChunks[i].setLongStringColumn(i >= totalShortStringDimSize);
         dimensionColumnPages[i][pageCounter] =
-            dimRawColumnChunks[i].convertToDimColDataChunkWithOutCache(pageCounter,
-                i >= dimensionColumnPages.length - totalLongStringDimSize);
+            dimRawColumnChunks[i].convertToDimColDataChunkWithOutCache(pageCounter);
       }
     }
 

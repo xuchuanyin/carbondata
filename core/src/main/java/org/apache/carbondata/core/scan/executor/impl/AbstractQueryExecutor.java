@@ -311,6 +311,8 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
     blockExecutionInfo
         .setTotalNumberDimensionToRead(
             segmentProperties.getDimensionOrdinalToChunkMapping().size());
+    blockExecutionInfo.setTotalNumberLongStringDimensionToRead(
+        segmentProperties.getNumberOfLongStringColumns());
     blockExecutionInfo.setPrefetchBlocklet(!queryModel.isReadPageByPage());
     blockExecutionInfo
         .setTotalNumberOfMeasureToRead(segmentProperties.getMeasuresOrdinalToChunkMapping().size());
