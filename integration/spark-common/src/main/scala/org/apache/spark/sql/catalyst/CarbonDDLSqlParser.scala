@@ -279,7 +279,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
     fields.zipWithIndex.foreach { case (field, index) =>
       field.schemaOrdinal = index
     }
-    val (dims, msrs, noDictionaryDims, sortKeyDims, textColumns) = extractDimAndMsrFields(
+    val (dims, msrs, noDictionaryDims, sortKeyDims, varcharColumns) = extractDimAndMsrFields(
       fields, tableProperties)
 
     // column properties
@@ -312,7 +312,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
       reorderDimensions(dims.map(f => normalizeType(f)).map(f => addParent(f))),
       msrs.map(f => normalizeType(f)),
       Option(sortKeyDims),
-      Option(textColumns),
+      Option(varcharColumns),
       Option(noDictionaryDims),
       Option(noInvertedIdxCols),
       groupCols,
@@ -557,19 +557,19 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
     var dictExcludeCols: Array[String] = Array[String]()
     var noDictionaryDims: Seq[String] = Seq[String]()
     var dictIncludeCols: Seq[String] = Seq[String]()
-    var textCols: Seq[String] = Seq[String]()
+    var varcharCols: Seq[String] = Seq[String]()
 
     // All long_string cols should be there in create table cols and should be of string data type
     if (tableProperties.get(CarbonCommonConstants.LONG_STRING_COLUMNS).isDefined) {
-      textCols =
+      varcharCols =
         tableProperties(CarbonCommonConstants.LONG_STRING_COLUMNS).split(",").map(_.trim)
-      textCols.foreach { textCol =>
-        val exists = fields.exists(f => f.column.equalsIgnoreCase(textCol) &&
+      varcharCols.foreach { varcharCol =>
+        val exists = fields.exists(f => f.column.equalsIgnoreCase(varcharCol) &&
                                         DataTypes.STRING.getName.equalsIgnoreCase(f.dataType.get))
         if (!exists) {
           throw new MalformedCarbonCommandException(
             s"""
-               |${CarbonCommonConstants.LONG_STRING_COLUMNS}: $textCol does not exist in table
+               |${CarbonCommonConstants.LONG_STRING_COLUMNS}: $varcharCol does not exist in table
                | or its data type is not string. Please check create table statement.
              """.stripMargin)
         }
@@ -605,7 +605,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
             val errormsg = s"sort_columns is unsupported for $dataType datatype column: " + column
             throw new MalformedCarbonCommandException(errormsg)
           }
-          if (textCols.exists(x => x.equalsIgnoreCase(column))) {
+          if (varcharCols.exists(x => x.equalsIgnoreCase(column))) {
             throw new MalformedCarbonCommandException(
               s"sort_columns is unsupported for long string datatype column $column")
           }
@@ -710,7 +710,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
       // add all dimension(except long string columns) to SORT_COLUMNS.
       dimFields.foreach { field =>
         if (!isComplexDimDictionaryExclude(field.dataType.get) &&
-            !textCols.contains(field.column)) {
+            !varcharCols.contains(field.column)) {
           sortKeyDims :+= field.column
         }
       }
@@ -721,7 +721,7 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
     } else {
       tableProperties.put(CarbonCommonConstants.SORT_COLUMNS, sortKeyDims.mkString(","))
     }
-    (dimFields.toSeq, msrFields, noDictionaryDims, sortKeyDims, textCols)
+    (dimFields.toSeq, msrFields, noDictionaryDims, sortKeyDims, varcharCols)
   }
 
   def isDefaultMeasure(dataType: Option[String]): Boolean = {
