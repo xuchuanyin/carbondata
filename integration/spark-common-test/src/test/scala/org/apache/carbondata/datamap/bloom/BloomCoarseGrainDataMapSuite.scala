@@ -22,8 +22,8 @@ import java.util.UUID
 
 import scala.util.Random
 
-import org.apache.spark.sql.{CarbonSession, DataFrame}
 import org.apache.spark.sql.test.util.QueryTest
+import org.apache.spark.sql.{CarbonSession, DataFrame}
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager
