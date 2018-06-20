@@ -460,7 +460,7 @@ class NewRddIterator(rddIter: Iterator[Row],
     for (i <- 0 until columns.length) {
       columns(i) = CarbonScalaUtil.getString(row.get(i), serializationNullFormat,
         delimiterLevel1, delimiterLevel2, timeStampFormat, dateFormat,
-        isVarcharType = isVarcharTypeMapping(i))
+        isVarcharType = i < isVarcharTypeMapping.size && isVarcharTypeMapping(i))
     }
     columns
   }
@@ -525,7 +525,7 @@ class LazyRddIterator(serializer: SerializerInstance,
     for (i <- 0 until columns.length) {
       columns(i) = CarbonScalaUtil.getString(row.get(i), serializationNullFormat,
         delimiterLevel1, delimiterLevel2, timeStampFormat, dateFormat,
-        isVarcharType = isVarcharTypeMapping(i))
+        isVarcharType = i < isVarcharTypeMapping.size && isVarcharTypeMapping(i))
     }
     columns
   }
