@@ -19,6 +19,7 @@ package org.apache.carbondata.datamap.bloom;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.carbondata.common.annotations.InterfaceAudience;
@@ -26,11 +27,13 @@ import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datamap.dev.DataMapWriter;
+import org.apache.carbondata.core.datastore.ColumnType;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.datastore.page.ColumnPage;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
+import org.apache.carbondata.core.util.ByteUtil;
 import org.apache.carbondata.core.util.CarbonUtil;
 
 import org.apache.hadoop.util.bloom.CarbonBloomFilter;
@@ -120,21 +123,41 @@ public class BloomDataMapWriter extends DataMapWriter {
   @Override
   public void onPageAdded(int blockletId, int pageId, int pageSize, ColumnPage[] pages) {
     List<CarbonColumn> indexColumns = getIndexColumns();
+    ColumnType columnType;
     for (int rowId = 0; rowId < pageSize; rowId++) {
       // for each indexed column, add the data to bloom filter
+      // be care of the datetype, dictionary, local dictionary
       for (int i = 0; i < indexColumns.size(); i++) {
         Object data = pages[i].getData(rowId);
+        columnType = pages[i].getColumnSpec().getColumnType();
         DataType dataType = indexColumns.get(i).getDataType();
+        LOG.debug("XU onPageAdded column->" + indexColumns.get(i).getColName()
+            + ", dataType->" + indexColumns.get(i).getDataType()
+            + ", encoding->" + indexColumns.get(i).getEncoder().get(0)
+            + ", encoding2->" + indexColumns.get(i).getColumnSchema().getEncodingList().get(0)
+            + ", pageColumnName->" + pages[i].getColumnSpec().getFieldName()
+            + ", pageDataType->" + pages[i].getColumnSpec().getSchemaDataType()
+            + ", pageColumnType->" + pages[i].getColumnSpec().getColumnType()
+            + ", isDim->" + indexColumns.get(i).isDimension()
+            + ", rawValue->" + data);
         byte[] indexValue;
-        if (DataTypes.STRING == dataType) {
-          indexValue = getStringData(data);
-        } else if (DataTypes.BYTE_ARRAY == dataType) {
-          byte[] originValue = (byte[]) data;
-          // String and byte array is LV encoded, L is short type
-          indexValue = new byte[originValue.length - 2];
-          System.arraycopy(originValue, 2, indexValue, 0, originValue.length - 2);
-        } else {
+        if (indexColumns.get(i).isMeasure()) {
           indexValue = CarbonUtil.getValueAsBytes(dataType, data);
+        } else {
+          // dimensions originally can be numeric type, need to handle it here.
+          if (DataTypes.STRING == dataType) {
+            indexValue = getStringData(data);
+          } else if (DataTypes.BYTE_ARRAY == dataType) {
+            indexValue = getRawBytes((byte[]) data);
+          } else if (columnType == ColumnType.GLOBAL_DICTIONARY) {
+            // for dictionary column, carbon store it as byte_array,
+            // even though the datatype is not string (for example integer)
+            indexValue = (byte[]) data;
+            LOG.error("XU dict->" + Arrays.toString(indexValue)
+                + ", len->" + indexValue.length);
+          } else {
+            indexValue = CarbonUtil.getValueAsBytes(dataType, data);
+          }
         }
         indexBloomFilters.get(i).add(new Key(indexValue));
       }
@@ -143,6 +166,12 @@ public class BloomDataMapWriter extends DataMapWriter {
 
   protected byte[] getStringData(Object data) {
     byte[] lvData = (byte[]) data;
+    byte[] indexValue = new byte[lvData.length - 2];
+    System.arraycopy(lvData, 2, indexValue, 0, lvData.length - 2);
+    return indexValue;
+  }
+
+  private byte[] getRawBytes(byte[] lvData) {
     byte[] indexValue = new byte[lvData.length - 2];
     System.arraycopy(lvData, 2, indexValue, 0, lvData.length - 2);
     return indexValue;

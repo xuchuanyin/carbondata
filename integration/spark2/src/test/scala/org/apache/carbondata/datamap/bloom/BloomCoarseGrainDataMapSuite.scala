@@ -17,17 +17,16 @@
 
 package org.apache.carbondata.datamap.bloom
 
-import java.io.{File, PrintWriter}
-import java.util.UUID
+import java.io.File
 
-import scala.util.Random
-
-import org.apache.spark.sql.{CarbonSession, DataFrame}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.util.CarbonProperties
+import org.apache.carbondata.datamap.bloom.BloomCoarseGrainDataMapTestUtil.deleteFile
+import org.apache.carbondata.datamap.bloom.BloomCoarseGrainDataMapTestUtil.createFile
+import org.apache.carbondata.datamap.bloom.BloomCoarseGrainDataMapTestUtil.checkBasicQuery
 
 class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with BeforeAndAfterEach {
   val bigFile = s"$resourcesPath/bloom_datamap_input_big.csv"
@@ -37,8 +36,10 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
   val dataMapName = "bloom_dm"
 
   override protected def beforeAll(): Unit = {
+    deleteFile(bigFile)
+    deleteFile(smallFile)
     new File(CarbonProperties.getInstance().getSystemFolderLocation).delete()
-    createFile(bigFile, line = 500000)
+    createFile(bigFile, line = 50000)
     createFile(smallFile)
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
@@ -47,35 +48,6 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
   override def afterEach(): Unit = {
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
-  }
-
-  private def checkSqlHitDataMap(sqlText: String, dataMapName: String, shouldHit: Boolean): DataFrame = {
-    if (shouldHit) {
-      assert(sqlContext.sparkSession.asInstanceOf[CarbonSession].isDataMapHit(sqlText, dataMapName))
-    } else {
-      assert(!sqlContext.sparkSession.asInstanceOf[CarbonSession].isDataMapHit(sqlText, dataMapName))
-    }
-    sql(sqlText)
-  }
-
-  private def checkQuery(dataMapName: String, shouldHit: Boolean = true) = {
-    checkAnswer(
-      checkSqlHitDataMap(s"select * from $bloomDMSampleTable where id = 1", dataMapName, shouldHit),
-      sql(s"select * from $normalTable where id = 1"))
-    checkAnswer(
-      checkSqlHitDataMap(s"select * from $bloomDMSampleTable where id = 999", dataMapName, shouldHit),
-      sql(s"select * from $normalTable where id = 999"))
-    checkAnswer(
-      checkSqlHitDataMap(s"select * from $bloomDMSampleTable where city = 'city_1'", dataMapName, shouldHit),
-      sql(s"select * from $normalTable where city = 'city_1'"))
-    checkAnswer(
-      checkSqlHitDataMap(s"select * from $bloomDMSampleTable where city = 'city_999'", dataMapName, shouldHit),
-      sql(s"select * from $normalTable where city = 'city_999'"))
-     checkAnswer(
-      sql(s"select min(id), max(id), min(name), max(name), min(city), max(city)" +
-          s" from $bloomDMSampleTable"),
-      sql(s"select min(id), max(id), min(name), max(name), min(city), max(city)" +
-          s" from $normalTable"))
   }
 
   test("test create bloom datamap on table with existing data") {
@@ -120,7 +92,7 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
 
     sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable").show(false)
     checkExistence(sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable"), true, dataMapName)
-    checkQuery(dataMapName)
+    checkBasicQuery(dataMapName, bloomDMSampleTable, normalTable)
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
   }
@@ -162,7 +134,7 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
 
     sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable").show(false)
     checkExistence(sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable"), true, dataMapName)
-    checkQuery(dataMapName)
+    checkBasicQuery(dataMapName, bloomDMSampleTable, normalTable)
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
   }
@@ -224,7 +196,7 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
 
     sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable").show(false)
     checkExistence(sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable"), true, dataMapName)
-    checkQuery(dataMapName)
+    checkBasicQuery(dataMapName, bloomDMSampleTable, normalTable)
 
     // once we load again, datamap should be disabled, since it is lazy
     sql(
@@ -239,7 +211,7 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
          """.stripMargin)
     map = DataMapStatusManager.readDataMapStatusMap()
     assert(!map.get(dataMapName).isEnabled)
-    checkQuery(dataMapName, shouldHit = false)
+    checkBasicQuery(dataMapName, bloomDMSampleTable, normalTable, shouldHit = false)
 
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
@@ -281,7 +253,7 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
     checkExistence(sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable"), true, dataMapName)
 
     // datamap is not loaded, so it should not hit
-    checkQuery(dataMapName, shouldHit = false)
+    checkBasicQuery(dataMapName, bloomDMSampleTable, normalTable, shouldHit = false)
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
   }
@@ -291,27 +263,5 @@ class BloomCoarseGrainDataMapSuite extends QueryTest with BeforeAndAfterAll with
     deleteFile(smallFile)
     sql(s"DROP TABLE IF EXISTS $normalTable")
     sql(s"DROP TABLE IF EXISTS $bloomDMSampleTable")
-  }
-
-  private def createFile(fileName: String, line: Int = 10000, start: Int = 0) = {
-    if (!new File(fileName).exists()) {
-      val write = new PrintWriter(new File(fileName))
-      for (i <- start until (start + line)) {
-        write.println(
-          s"$i,n$i,city_$i,${ Random.nextInt(80) }," +
-          s"${ UUID.randomUUID().toString },${ UUID.randomUUID().toString }," +
-          s"${ UUID.randomUUID().toString },${ UUID.randomUUID().toString }," +
-          s"${ UUID.randomUUID().toString },${ UUID.randomUUID().toString }," +
-          s"${ UUID.randomUUID().toString },${ UUID.randomUUID().toString }")
-      }
-      write.close()
-    }
-  }
-
-  private def deleteFile(fileName: String): Unit = {
-    val file = new File(fileName)
-    if (file.exists()) {
-      file.delete()
-    }
   }
 }
