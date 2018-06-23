@@ -19,12 +19,10 @@ package org.apache.carbondata.datamap.bloom;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.apache.carbondata.common.annotations.InterfaceAudience;
-import org.apache.carbondata.common.logging.LogService;
-import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datamap.dev.DataMapWriter;
 import org.apache.carbondata.core.datastore.ColumnType;
@@ -33,7 +31,6 @@ import org.apache.carbondata.core.datastore.page.ColumnPage;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
-import org.apache.carbondata.core.util.ByteUtil;
 import org.apache.carbondata.core.util.CarbonUtil;
 
 import org.apache.hadoop.util.bloom.CarbonBloomFilter;
@@ -49,8 +46,6 @@ import org.apache.hadoop.util.hash.Hash;
  */
 @InterfaceAudience.Internal
 public class BloomDataMapWriter extends DataMapWriter {
-  private static final LogService LOG = LogServiceFactory.getLogService(
-      BloomDataMapWriter.class.getCanonicalName());
   private int bloomFilterSize;
   private double bloomFilterFpp;
   private boolean compressBloom;
@@ -131,33 +126,26 @@ public class BloomDataMapWriter extends DataMapWriter {
         Object data = pages[i].getData(rowId);
         columnType = pages[i].getColumnSpec().getColumnType();
         DataType dataType = indexColumns.get(i).getDataType();
-        LOG.debug("XU onPageAdded column->" + indexColumns.get(i).getColName()
-            + ", dataType->" + indexColumns.get(i).getDataType()
-            + ", encoding->" + indexColumns.get(i).getEncoder().get(0)
-            + ", encoding2->" + indexColumns.get(i).getColumnSchema().getEncodingList().get(0)
-            + ", pageColumnName->" + pages[i].getColumnSpec().getFieldName()
-            + ", pageDataType->" + pages[i].getColumnSpec().getSchemaDataType()
-            + ", pageColumnType->" + pages[i].getColumnSpec().getColumnType()
-            + ", isDim->" + indexColumns.get(i).isDimension()
-            + ", rawValue->" + data);
         byte[] indexValue;
         if (indexColumns.get(i).isMeasure()) {
           indexValue = CarbonUtil.getValueAsBytes(dataType, data);
         } else {
-          // dimensions originally can be numeric type, need to handle it here.
-          if (DataTypes.STRING == dataType) {
-            indexValue = getStringData(data);
-          } else if (DataTypes.BYTE_ARRAY == dataType) {
-            indexValue = getRawBytes((byte[]) data);
-          } else if (columnType == ColumnType.GLOBAL_DICTIONARY) {
-            // for dictionary column, carbon store it as byte_array,
-            // even though the datatype is not string (for example integer)
+          assert data instanceof byte[];
+          // for dictionary column, carbon store it as byte_array,
+          // even though the datatype is not string (for example integer) and its not l-v;
+          // for non-dictionary column, it is l-v structure
+          if (columnType == ColumnType.GLOBAL_DICTIONARY
+              || columnType == ColumnType.DIRECT_DICTIONARY) {
             indexValue = (byte[]) data;
-            LOG.error("XU dict->" + Arrays.toString(indexValue)
-                + ", len->" + indexValue.length);
+          } else if (indexColumns.get(i).getDataType() == DataTypes.VARCHAR) {
+            indexValue = DataConvertUtil.getRawBytesForVarchar((byte[]) data);
           } else {
-            indexValue = CarbonUtil.getValueAsBytes(dataType, data);
+            indexValue = DataConvertUtil.getRawBytes((byte[]) data);
           }
+        }
+        // bloomfilter cannot store empty bytes, so we deal with this scenario specially
+        if (indexValue.length == 0) {
+          indexValue = CarbonCommonConstants.MEMBER_DEFAULT_VAL_ARRAY;
         }
         indexBloomFilters.get(i).add(new Key(indexValue));
       }
@@ -166,12 +154,6 @@ public class BloomDataMapWriter extends DataMapWriter {
 
   protected byte[] getStringData(Object data) {
     byte[] lvData = (byte[]) data;
-    byte[] indexValue = new byte[lvData.length - 2];
-    System.arraycopy(lvData, 2, indexValue, 0, lvData.length - 2);
-    return indexValue;
-  }
-
-  private byte[] getRawBytes(byte[] lvData) {
     byte[] indexValue = new byte[lvData.length - 2];
     System.arraycopy(lvData, 2, indexValue, 0, lvData.length - 2);
     return indexValue;

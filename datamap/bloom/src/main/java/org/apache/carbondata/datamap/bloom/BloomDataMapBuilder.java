@@ -42,6 +42,7 @@ public class BloomDataMapBuilder extends BloomDataMapWriter implements DataMapBu
       boolean bloomCompress) throws IOException {
     super(tablePath, dataMapName, indexColumns, segment, shardName, bloomFilterSize, bloomFilterFpp,
         bloomCompress);
+    throw new RuntimeException("Deferred rebuild for bloomfilter datamap is not supported right now");
   }
 
   @Override
@@ -61,6 +62,7 @@ public class BloomDataMapBuilder extends BloomDataMapWriter implements DataMapBu
     for (int i = 0; i < indexColumns.size(); i++) {
       Object data = values[i];
       DataType dataType = indexColumns.get(i).getDataType();
+      // todo: the index value should refer to that in BloomDataMapWriter
       byte[] indexValue;
       if (DataTypes.STRING == dataType) {
         indexValue = getStringData(data);

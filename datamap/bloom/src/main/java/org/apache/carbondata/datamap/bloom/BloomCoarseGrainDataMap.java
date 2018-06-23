@@ -19,11 +19,15 @@ package org.apache.carbondata.datamap.bloom;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.carbondata.common.annotations.InterfaceAudience;
@@ -39,17 +43,21 @@ import org.apache.carbondata.core.indexstore.Blocklet;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.keygenerator.KeyGenException;
 import org.apache.carbondata.core.keygenerator.KeyGenerator;
+import org.apache.carbondata.core.keygenerator.columnar.ColumnarSplitter;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.datatype.DataType;
+import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.encoder.Encoding;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
+import org.apache.carbondata.core.metadata.schema.table.column.CarbonDimension;
 import org.apache.carbondata.core.scan.expression.ColumnExpression;
 import org.apache.carbondata.core.scan.expression.Expression;
 import org.apache.carbondata.core.scan.expression.LiteralExpression;
 import org.apache.carbondata.core.scan.expression.conditional.EqualToExpression;
 import org.apache.carbondata.core.scan.filter.resolver.FilterResolverIntf;
-import org.apache.carbondata.core.util.ByteUtil;
+import org.apache.carbondata.core.util.CarbonProperties;
+import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.processing.loading.DataField;
 import org.apache.carbondata.processing.loading.converter.BadRecordLogHolder;
 import org.apache.carbondata.processing.loading.converter.FieldConverter;
@@ -79,6 +87,9 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
   private Map<String, FieldConverter> name2Converters;
   private BadRecordLogHolder badRecordLogHolder;
   private KeyGenerator keyGenerator;
+  private ColumnarSplitter columnarSplitter;
+  // for dictionary index column, mapping column name to the ordinal among the dictionary column
+  private Map<String, Integer> dictCol2MdkIdx;
 
   @Override
   public void init(DataMapModel dataMapModel) throws IOException {
@@ -122,8 +133,14 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
     for (int i = 0; i < indexedColumn.size(); i++) {
       localCaches[i] = new ConcurrentHashMap<>();
       DataField dataField = new DataField(indexedColumn.get(i));
-      dataField.setDateFormat(CarbonCommonConstants.CARBON_DATE_DEFAULT_FORMAT);
-      dataField.setTimestampFormat(CarbonCommonConstants.CARBON_TIMESTAMP_DEFAULT_FORMAT);
+      String dateFormat = CarbonProperties.getInstance().getProperty(
+          CarbonCommonConstants.CARBON_DATE_FORMAT,
+          CarbonCommonConstants.CARBON_DATE_DEFAULT_FORMAT);
+      dataField.setDateFormat(dateFormat);
+      String tsFormat = CarbonProperties.getInstance().getProperty(
+          CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT,
+          CarbonCommonConstants.CARBON_TIMESTAMP_DEFAULT_FORMAT);
+      dataField.setTimestampFormat(tsFormat);
       FieldConverter fieldConverter = FieldEncoderFactory.getInstance().createFieldEncoder(
           dataField, absoluteTableIdentifier, i, nullFormat,
           client, onePass, localCaches[i], isEmptyBadRecord);
@@ -138,6 +155,18 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
   public List<Blocklet> prune(FilterResolverIntf filterExp, SegmentProperties segmentProperties,
       List<PartitionSpec> partitions) {
     this.keyGenerator = segmentProperties.getDimensionKeyGenerator();
+    this.columnarSplitter = segmentProperties.getFixedLengthKeySplitter();
+    this.dictCol2MdkIdx = new HashMap<>(indexedColumn.size());
+    int idx = 0;
+    for (CarbonDimension dimension : segmentProperties.getDimensions()) {
+      if (dimension.isDirectDictionaryEncoding() || dimension.isGlobalDictionaryEncoding()) {
+        if (name2Col.containsKey(dimension.getColName())) {
+          this.dictCol2MdkIdx.put(dimension.getColName(), idx++);
+        } else {
+          idx++;
+        }
+      }
+    }
     List<Blocklet> hitBlocklets = new ArrayList<Blocklet>();
     if (filterExp == null) {
       // null is different from empty here. Empty means after pruning, no blocklet need to scan.
@@ -201,58 +230,62 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
       LiteralExpression le) {
     String columnName = ce.getColumnName();
     DataType dataType = ce.getDataType();
-    Object value = le.getLiteralExpValue();
-    return createQueryModel(this.name2Col.get(columnName), value, dataType);
+    Object expValue = le.getLiteralExpValue();
+    Object literalValue;
+    // if the value is date type, here the exp-value will be long,
+    // we need to convert it back to date format,
+    // because carbon internally generate dict based on the date format
+    if (le.getLiteralExpDataType() == DataTypes.DATE) {
+      DateFormat format = new SimpleDateFormat(CarbonCommonConstants.CARBON_DATE_DEFAULT_FORMAT);
+      // The below settings are set statically according to DateDirectlyDictionaryGenerator
+      format.setLenient(false);
+      format.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+      literalValue = format.format(new Date((long) expValue / 1000));
+    } else if (le.getLiteralExpDataType() == DataTypes.TIMESTAMP) {
+      DateFormat format = new SimpleDateFormat(
+          CarbonCommonConstants.CARBON_TIMESTAMP_DEFAULT_FORMAT);
+      // The below settings are set statically according to TimeStampDirectlyDictionaryGenerator
+      format.setLenient(false);
+      literalValue = format.format(new Date((long) expValue / 1000));
+    } else {
+      literalValue = expValue;
+    }
+
+    return createQueryModel(this.name2Col.get(columnName), literalValue, dataType);
   }
 
-  private BloomQueryModel createQueryModel(CarbonColumn carbonColumn, Object filterValue,
+  private BloomQueryModel createQueryModel(CarbonColumn carbonColumn, Object filterLiteralValue,
       DataType filterValueDataType) throws RuntimeException {
-    // the origin filterValue is not string,
+    // the origin filterLiteralValue is not string,
     // need to convert it the string and it will be used during converting
     String stringFilterValue = null;
-    if (null != filterValue) {
-      stringFilterValue = String.valueOf(filterValue);
+    if (null != filterLiteralValue) {
+      stringFilterValue = String.valueOf(filterLiteralValue);
     }
     Object convertedValue =  this.name2Converters.get(carbonColumn.getColName()).convert(
             stringFilterValue, badRecordLogHolder);
 
-    byte[] internalFilterValue = null;
+    byte[] internalFilterValue;
     try {
-      if (carbonColumn.getEncoder().contains(Encoding.DICTIONARY)) {
-        internalFilterValue = this.keyGenerator.generateKey(new int[] { (int) convertedValue });
+      if (carbonColumn.isMeasure()) {
+        internalFilterValue = CarbonUtil.getValueAsBytes(
+            carbonColumn.getDataType(), convertedValue);
+      } else if (carbonColumn.getEncoder().contains(Encoding.DICTIONARY)) {
+        // only the index dictionary column exists in this mdk at corresponding position
+        byte[] fakeMdk = this.keyGenerator.generateKey(new int[] { (int) convertedValue });
+        byte[][] fakeKeys = this.columnarSplitter.splitKey(fakeMdk);
+
+        internalFilterValue = fakeKeys[this.dictCol2MdkIdx.get(carbonColumn.getColName())];
+      } else if (carbonColumn.getDataType() == DataTypes.VARCHAR) {
+        internalFilterValue = (byte[]) convertedValue;
       } else {
-        internalFilterValue = convertValueAsBytes(convertedValue);
+        internalFilterValue = (byte[]) convertedValue;
       }
     } catch (KeyGenException e) {
       throw new RuntimeException(e);
     }
-    LOGGER.error("XU createQueryModel: col->" + carbonColumn.getColName()
-        + ", colDatatype->" + carbonColumn.getDataType()
-        + ", filterValue->" + filterValue
-        + ", filterValueDataType->" + filterValueDataType
-        + ", convertedValue->" + convertedValue
-        + ", internalValue->" + Arrays.toString(internalFilterValue));
     return new BloomQueryModel(carbonColumn.getColName(), internalFilterValue);
-  }
-
-  private byte[] convertValueAsBytes(Object value) {
-    if (value instanceof Integer) {
-      return ByteUtil.toBytes((int) value);
-    } else if (value instanceof Long) {
-      return ByteUtil.toBytes((long) value);
-    } else if (value instanceof Short) {
-      return ByteUtil.toBytes((short) value);
-    } else if (value instanceof Double) {
-      return ByteUtil.toBytes((double) value);
-    } else if (value instanceof String) {
-      return ByteUtil.toBytes((String) value);
-    } else if (value instanceof Boolean) {
-      return ByteUtil.toBytes((boolean) value);
-    } else if (value instanceof byte[]) {
-      return (byte[]) value;
-    } else {
-      throw new RuntimeException("Unknown data type for value: " + value);
-    }
   }
 
   @Override
@@ -264,6 +297,7 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
   public void clear() {
     bloomIndexList.clear();
     bloomIndexList = null;
+
   }
 
   /**
@@ -287,7 +321,7 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
     public String toString() {
       final StringBuilder sb = new StringBuilder("BloomQueryModel{");
       sb.append("columnName='").append(columnName).append('\'');
-      sb.append(", filterValue=").append(filterValue);
+      sb.append(", filterValue=").append(Arrays.toString(filterValue));
       sb.append('}');
       return sb.toString();
     }

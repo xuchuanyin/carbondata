@@ -18,12 +18,9 @@
 package org.apache.carbondata.processing.loading.converter.impl;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.carbondata.common.logging.LogService;
-import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.cache.Cache;
 import org.apache.carbondata.core.cache.CacheProvider;
 import org.apache.carbondata.core.cache.CacheType;
@@ -38,7 +35,6 @@ import org.apache.carbondata.core.dictionary.generator.key.DictionaryMessage;
 import org.apache.carbondata.core.dictionary.generator.key.DictionaryMessageType;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonDimension;
-import org.apache.carbondata.core.util.ByteUtil;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.DataTypeUtil;
 import org.apache.carbondata.processing.loading.converter.BadRecordLogHolder;
@@ -48,9 +44,6 @@ import org.apache.carbondata.processing.loading.exception.CarbonDataLoadingExcep
 import org.apache.carbondata.processing.util.CarbonDataProcessorUtil;
 
 public class DictionaryFieldConverterImpl extends AbstractDictionaryFieldConverterImpl {
-
-  private static final LogService LOGGER =
-      LogServiceFactory.getLogService(DictionaryFieldConverterImpl.class.getName());
 
   private BiDictionary<Integer, Object> dictionaryGenerator;
 
@@ -71,6 +64,7 @@ public class DictionaryFieldConverterImpl extends AbstractDictionaryFieldConvert
       DictionaryClient client, boolean useOnePass, Map<Object, Integer> localCache,
       boolean isEmptyBadRecord, DictionaryColumnUniqueIdentifier identifier) throws IOException {
     this.index = index;
+    assert carbonColumn instanceof CarbonDimension;
     this.carbonDimension = (CarbonDimension) carbonColumn;
     this.nullFormat = nullFormat;
     this.isEmptyBadRecord = isEmptyBadRecord;
@@ -102,11 +96,7 @@ public class DictionaryFieldConverterImpl extends AbstractDictionaryFieldConvert
   @Override public void convert(CarbonRow row, BadRecordLogHolder logHolder)
       throws CarbonDataLoadingException {
     try {
-      String origin = row.getString(index);
-      Object convertedValue = convert(row.getString(index), logHolder);
-      LOGGER.error("XU dictConverter:" + origin + "->" + convertedValue
-          + "->" + Arrays.toString(ByteUtil.toBytes((int) convertedValue)));
-      row.update(convertedValue, index);
+      row.update(convert(row.getString(index), logHolder), index);
     } catch (RuntimeException e) {
       throw new CarbonDataLoadingException(e);
     }

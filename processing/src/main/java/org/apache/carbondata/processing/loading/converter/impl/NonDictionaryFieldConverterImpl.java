@@ -89,8 +89,8 @@ public class NonDictionaryFieldConverterImpl implements FieldConverter {
         } else {
           Object parsedValue = DataTypeUtil
               .getDataDataTypeForNoDictionaryColumn(dimensionValue, dataType, dateFormat);
-          if (dataType == DataTypes.STRING
-              && parsedValue.toString().length() > CarbonCommonConstants.MAX_CHARS_PER_COLUMN_DEFAULT) {
+          if (dataType == DataTypes.STRING && parsedValue.toString().length()
+              > CarbonCommonConstants.MAX_CHARS_PER_COLUMN_DEFAULT) {
             throw new CarbonDataLoadingException(String.format(
                 "Dataload failed, String size cannot exceed %d bytes,"
                     + " please consider long string data type",
