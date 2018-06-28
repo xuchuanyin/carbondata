@@ -33,6 +33,7 @@ import org.apache.carbondata.core.datamap.DataMapJob;
 import org.apache.carbondata.core.datamap.DataMapUtil;
 import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datamap.dev.expr.DataMapExprWrapper;
+import org.apache.carbondata.core.datamap.dev.expr.DataMapWrapperSchema;
 import org.apache.carbondata.core.exception.InvalidConfigurationException;
 import org.apache.carbondata.core.indexstore.ExtendedBlocklet;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
@@ -437,7 +438,7 @@ m filterExpression
         dataMapExprWrapper.prune(segmentIds, partitionsToPrune);
 
     ExplainCollector.recordDefaultDataMapPruning(
-        dataMapExprWrapper.getDataMapSchema(), prunedBlocklets.size());
+        DataMapWrapperSchema.fromDataMapWrapper(dataMapExprWrapper), prunedBlocklets.size());
 
     DataMapChooser chooser = new DataMapChooser(getOrCreateCarbonTable(job.getConfiguration()));
 
@@ -456,7 +457,7 @@ m filterExpression
       }
 
       ExplainCollector.recordCGDataMapPruning(
-          cgDataMapExprWrapper.getDataMapSchema(), prunedBlocklets.size());
+          DataMapWrapperSchema.fromDataMapWrapper(cgDataMapExprWrapper), prunedBlocklets.size());
     }
     // Now try to prune with FG DataMap.
     if (isFgDataMapPruningEnable(job.getConfiguration()) && dataMapJob != null) {
@@ -469,7 +470,7 @@ m filterExpression
                 partitionsToPrune);
 
         ExplainCollector.recordFGDataMapPruning(
-            fgDataMapExprWrapper.getDataMapSchema(), prunedBlocklets.size());
+            DataMapWrapperSchema.fromDataMapWrapper(fgDataMapExprWrapper), prunedBlocklets.size());
       }
     } // TODO: add a else branch to push FGDataMap pruning to reader side
     return prunedBlocklets;
