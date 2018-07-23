@@ -860,8 +860,13 @@ class TableNewProcessor(cm: TableModel) {
     val format = cm.tableProperties.get(CarbonCommonConstants.FORMAT)
     if (format.isDefined) {
       tableInfo.setFormat(format.get)
-      val formatProperties = cm.tableProperties.filter(pair =>
-        pair._1.startsWith(s"${format.get.toLowerCase}.")).asJava
+      // note that use pair.asScala to implicitly convert to Java HashMap will cause
+      // Spark job serialization problem
+      val formatProperties = new util.HashMap[String, String]()
+      cm.tableProperties.filter(pair => pair._1.startsWith(s"${format.get.toLowerCase}."))
+        .foreach { case (k, v) =>
+        formatProperties.put(k, v)
+        }
       tableInfo.setFormatProperties(formatProperties)
     }
     tableInfo
