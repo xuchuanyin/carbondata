@@ -152,3 +152,15 @@ class RefreshResultImpl extends RefreshResult[String, (String, Boolean)] {
   override def getKey(key: String,
       value: (String, Boolean)): (String, (String, Boolean)) = (key, value)
 }
+
+trait FileLevelDataMapBuildResult[K, V] extends Serializable {
+  // to accelerate the index build procedure, it will work in parallel per segment per file,
+  // so the result structure is segmentNo -> (fileName, status)
+  def getKey(key: String, value: (String, Boolean)) : (K, V)
+}
+
+class FileLevelDataMapBuildResultImpl
+  extends FileLevelDataMapBuildResult[String, (String, Boolean)] {
+  override def getKey(key: String,
+      value: (String, Boolean)): (String, (String, Boolean)) = (key, value)
+}

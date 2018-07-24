@@ -19,6 +19,8 @@ package org.apache.spark.sql.execution.command.management
 
 import java.util.UUID
 
+import scala.collection.mutable
+
 import org.apache.spark.sql.{CarbonEnv, Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.execution.command.AtomicRunnableCommand
@@ -26,14 +28,16 @@ import org.apache.spark.sql.hive.CarbonRelation
 import org.apache.spark.util.FileUtils
 
 import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.datamap.DataMapStoreManager
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable
+import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, DataMapSchema}
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonUtil
 import org.apache.carbondata.core.util.path.CarbonTablePath
-import org.apache.carbondata.events.{OperationContext, OperationListenerBus}
-import org.apache.carbondata.processing.loading.events.LoadEvents.LoadMetadataEvent
+import org.apache.carbondata.datamap.FileLevelIndexDataMapBuildRDD
+import org.apache.carbondata.events.{BuildDataMapPostExecutionEvent, BuildDataMapPreExecutionEvent, OperationContext, OperationListenerBus}
+import org.apache.carbondata.processing.loading.events.LoadEvents.{LoadMetadataEvent, LoadTablePostExecutionEvent, LoadTablePreExecutionEvent}
 import org.apache.carbondata.processing.loading.model.{CarbonDataLoadSchema, CarbonLoadModel}
 import org.apache.carbondata.processing.util.CarbonLoaderUtil
 
@@ -62,10 +66,15 @@ case class CarbonAddSegmentCommand(
     }
 
     if (carbonTable.isHivePartitionTable) {
-      LOGGER.error("Ignore hive partition table for now")
+      throw new UnsupportedOperationException(
+        "Carbondata currently does not support hive partition table for AddSegment command")
     }
 
-    operationContext.setProperty("isOverwrite", false)
+    if (carbonTable.isChildDataMap) {
+      throw new UnsupportedOperationException(
+        "Carbondata currently does not support child table for AddSegment command")
+    }
+
     if (CarbonUtil.hasAggregationDataMap(carbonTable)) {
       val loadMetadataEvent = new LoadMetadataEvent(carbonTable, false)
       OperationListenerBus.getInstance().fireEvent(loadMetadataEvent, operationContext)
@@ -75,23 +84,12 @@ case class CarbonAddSegmentCommand(
 
   // will just mapping external files to segment metadata
   override def processData(sparkSession: SparkSession): Seq[Row] = {
-    // clean up invalid segment before creating a new entry
-    SegmentStatusManager.deleteLoadsAndUpdateMetadata(carbonTable, false, null)
     val currentLoadMetadataDetails = SegmentStatusManager.readLoadMetadata(
       CarbonTablePath.getMetadataPath(carbonTable.getTablePath))
     val newSegmentId = SegmentStatusManager.createNewSegmentId(currentLoadMetadataDetails).toString
     // create new segment folder in carbon store
     CarbonLoaderUtil.checkAndCreateCarbonDataLocation(newSegmentId, carbonTable)
 
-    val factFilePath = FileUtils.getPaths(filePathFromUser)
-
-    val uuid = if (carbonTable.isChildDataMap) {
-      Option(operationContext.getProperty("uuid")).getOrElse("").toString
-    } else if (carbonTable.hasAggregationDataMap) {
-      UUID.randomUUID().toString
-    } else {
-      ""
-    }
     // associate segment meta with file path, files are separated with comma
     val loadModel: CarbonLoadModel = new CarbonLoadModel
     loadModel.setSegmentId(newSegmentId)
@@ -101,14 +99,42 @@ case class CarbonAddSegmentCommand(
     loadModel.setCarbonTransactionalTable(carbonTable.isTransactionalTable)
     loadModel.readAndSetLoadMetadataDetails()
     loadModel.setFactTimeStamp(CarbonUpdateUtil.readCurrentTime())
+    val factFilePath = FileUtils.getPaths(filePathFromUser)
+    loadModel.setFactFilePath(factFilePath)
     val loadSchema: CarbonDataLoadSchema = new CarbonDataLoadSchema(carbonTable)
     loadModel.setCarbonDataLoadSchema(loadSchema)
 
+    val uuid = if (carbonTable.isChildDataMap) {
+      Option(operationContext.getProperty("uuid")).getOrElse("").toString
+    } else if (carbonTable.hasAggregationDataMap) {
+      UUID.randomUUID().toString
+    } else {
+      ""
+    }
+    operationContext.setProperty("uuid", uuid)
+    val loadTablePreExecutionEvent: LoadTablePreExecutionEvent = new LoadTablePreExecutionEvent(
+      carbonTable.getCarbonTableIdentifier, loadModel)
+    operationContext.setProperty("isOverwrite", false)
+    OperationListenerBus.getInstance().fireEvent(loadTablePreExecutionEvent, operationContext)
+    // add pre event listener for index datamap
+    val dmOperationCxt = new OperationContext
+    val indexDMs = DataMapStoreManager.getInstance().getAllDataMap(carbonTable)
+    import scala.collection.JavaConverters._
+    var dmSchemas: mutable.Seq[DataMapSchema]= null
+    if (null != indexDMs) {
+      dmSchemas = indexDMs.asScala
+        .filter(_.getDataMapSchema.isIndexDataMap)
+        .map(_.getDataMapSchema)
+      val dmNames = dmSchemas.map(_.getDataMapName)
+      val buildDataMapPreExecutionEvent: BuildDataMapPreExecutionEvent =
+        BuildDataMapPreExecutionEvent(sparkSession, carbonTable.getAbsoluteTableIdentifier, dmNames)
+      OperationListenerBus.getInstance().fireEvent(buildDataMapPreExecutionEvent, dmOperationCxt)
+    }
+
+    // clean up invalid segment before creating a new entry
+    SegmentStatusManager.deleteLoadsAndUpdateMetadata(carbonTable, false, null)
+
     val newLoadMetadataDetail: LoadMetadataDetails = new LoadMetadataDetails
-
-    // for external datasource table, there are no index files, so no need to write segment file
-
-    // update table status file
     newLoadMetadataDetail.setSegmentFile(null)
     newLoadMetadataDetail.setSegmentStatus(SegmentStatus.SUCCESS)
     newLoadMetadataDetail.setLoadStartTime(loadModel.getFactTimeStamp)
@@ -116,8 +142,16 @@ case class CarbonAddSegmentCommand(
     newLoadMetadataDetail.setIndexSize("1")
     newLoadMetadataDetail.setDataSize("1")
     newLoadMetadataDetail.setFileFormat(FileFormat.EXTERNAL)
-    newLoadMetadataDetail.setFactFilePath(factFilePath)
+    newLoadMetadataDetail.setFactFilePath(loadModel.getFactFilePath)
 
+    // generate index datamap at file level
+    if (null != dmSchemas && dmSchemas.nonEmpty) {
+      FileLevelIndexDataMapBuildRDD.buildDataMap(sparkSession, carbonTable, loadModel,
+        dmSchemas.toList)
+    }
+    // for external datasource table, there are no index files, so no need to write segment file
+
+    // update table status file
     val done = CarbonLoaderUtil.recordNewLoadMetadata(newLoadMetadataDetail, loadModel, true,
       false, uuid)
     if (!done) {
@@ -129,6 +163,15 @@ case class CarbonAddSegmentCommand(
       throw new Exception(errorMsg)
     } else {
       DataMapStatusManager.disableAllLazyDataMaps(carbonTable)
+    }
+
+    val loadTablePostExecutionEvent: LoadTablePostExecutionEvent =
+      new LoadTablePostExecutionEvent(carbonTable.getCarbonTableIdentifier, loadModel)
+    OperationListenerBus.getInstance().fireEvent(loadTablePostExecutionEvent, operationContext)
+    if (null != indexDMs) {
+      val buildDataMapPostExecutionEvent: BuildDataMapPostExecutionEvent =
+        BuildDataMapPostExecutionEvent(sparkSession, carbonTable.getAbsoluteTableIdentifier)
+      OperationListenerBus.getInstance().fireEvent(buildDataMapPostExecutionEvent, dmOperationCxt)
     }
     Seq.empty
   }

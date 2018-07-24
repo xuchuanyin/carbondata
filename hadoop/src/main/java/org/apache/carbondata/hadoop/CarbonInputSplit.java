@@ -252,6 +252,7 @@ public class CarbonInputSplit extends FileSplit
     if (dataMapWriterPathExists) {
       dataMapWritePath = in.readUTF();
     }
+    fileFormat = FileFormat.getByOrdinal(in.readInt());
   }
 
   @Override public void write(DataOutput out) throws IOException {
@@ -278,6 +279,7 @@ public class CarbonInputSplit extends FileSplit
     if (dataMapWritePath != null) {
       out.writeUTF(dataMapWritePath);
     }
+    out.writeInt(fileFormat.ordinal());
   }
 
   public List<String> getInvalidSegments() {
