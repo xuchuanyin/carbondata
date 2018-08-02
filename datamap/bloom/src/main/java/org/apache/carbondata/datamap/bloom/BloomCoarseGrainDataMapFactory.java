@@ -374,7 +374,15 @@ public class BloomCoarseGrainDataMapFactory extends DataMapFactory<CoarseGrainDa
       for (Segment segment : validSegments) {
         deleteDatamapData(segment);
       }
-    } catch (IOException e) {
+      // clear datamap root folder
+      String datamapRootPath = CarbonTablePath
+          .getDataMapStorePath(getCarbonTable().getTablePath(), dataMapName);
+      if (FileFactory.isFileExist(datamapRootPath)) {
+        CarbonFile file = FileFactory.getCarbonFile(datamapRootPath,
+            FileFactory.getFileType(datamapRootPath));
+        CarbonUtil.deleteFoldersAndFilesSilent(file);
+      }
+    } catch (IOException | InterruptedException e) {
       LOGGER.error("drop datamap failed, failed to delete datamap directory");
     }
   }

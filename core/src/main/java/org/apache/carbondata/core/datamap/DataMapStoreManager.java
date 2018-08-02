@@ -496,7 +496,7 @@ public final class DataMapStoreManager {
           try {
             DataMapUtil.executeDataMapJobForClearingDataMaps(carbonTable);
             tableDataMap.clear();
-          } catch (IOException e) {
+          } catch (Exception e) {
             LOGGER.error(e, "clear dataMap job failed");
             // ignoring the exception
           }

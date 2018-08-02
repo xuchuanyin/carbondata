@@ -181,6 +181,10 @@ case class CarbonCreateDataMapCommand(
 
   override def undoMetadata(sparkSession: SparkSession, exception: Exception): Seq[Row] = {
     if (dataMapProvider != null) {
+      // for non-lazy datamap, the datamap data will be generated while creating the datamaps,
+      // need to clean it also
+      dataMapProvider.cleanData()
+      // clean metadata
       dataMapProvider.cleanMeta()
     }
     Seq.empty

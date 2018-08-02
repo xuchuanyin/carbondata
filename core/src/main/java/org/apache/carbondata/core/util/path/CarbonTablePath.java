@@ -358,7 +358,7 @@ public class CarbonTablePath {
   }
 
   /**
-   * Return store path for datamap based on the dataMapName,
+   * Return store path for datamap based on the dataMapName and segmentId,
    *
    * @return store path based on datamapname
    */
@@ -370,6 +370,17 @@ public class CarbonTablePath {
         .append(dataMapName)
         .append(File.separator)
         .append(segmentId)
+        .toString();
+  }
+
+  /**
+   * Return root store path for datamap
+   */
+  public static String getDataMapStorePath(String tablePath, String dataMapName) {
+    return new StringBuilder()
+        .append(tablePath)
+        .append(File.separator)
+        .append(dataMapName)
         .toString();
   }
 
