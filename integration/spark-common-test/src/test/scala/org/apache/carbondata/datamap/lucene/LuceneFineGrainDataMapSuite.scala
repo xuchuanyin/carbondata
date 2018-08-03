@@ -132,7 +132,22 @@ class LuceneFineGrainDataMapSuite extends QueryTest with BeforeAndAfterAll {
     sql("drop datamap dm on table datamap_test")
   }
 
-  test("test lucene rebuild data map") {
+  // for CARBONDATA-2820, we will first block deferred rebuild for lucene
+  test("test block rebuild for lucene") {
+    sql(
+      s"""
+         | CREATE DATAMAP dm ON TABLE datamap_test
+         | USING 'lucene'
+         | DMProperties('INDEX_COLUMNS'='city')
+      """.stripMargin)
+    val exception = intercept[MalformedDataMapCommandException] {
+      sql(s"REBUILD DATAMAP dm ON TABLE datamap_test")
+    }
+    sql("drop datamap dm on table datamap_test")
+    assert(exception.getMessage.contains("provider 'lucene' does not support rebuild"))
+  }
+
+  ignore("test lucene rebuild data map") {
     sql("DROP TABLE IF EXISTS datamap_test4")
     sql(
       """
@@ -658,7 +673,7 @@ class LuceneFineGrainDataMapSuite extends QueryTest with BeforeAndAfterAll {
     assert(ex6.getMessage.contains("Delete operation is not supported"))
   }
 
-  test("test lucene fine grain multiple data map on table") {
+  ignore("test lucene fine grain multiple data map on table") {
     sql("DROP TABLE IF EXISTS datamap_test5")
     sql(
       """
@@ -691,7 +706,7 @@ class LuceneFineGrainDataMapSuite extends QueryTest with BeforeAndAfterAll {
     sql("DROP TABLE IF EXISTS datamap_test5")
   }
 
-  test("test lucene fine grain datamap rebuild") {
+  ignore("test lucene fine grain datamap rebuild") {
     sql("DROP TABLE IF EXISTS datamap_test5")
     sql(
       """
