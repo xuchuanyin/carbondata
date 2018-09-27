@@ -22,6 +22,8 @@ class BloomCoarseGrainDataMapFunctionSuite  extends QueryTest with BeforeAndAfte
   val normalTable = "carbon_normal"
   val bloomDMSampleTable = "carbon_bloom"
   val dataMapName = "bloom_dm"
+//  CarbonProperties.getInstance().addProperty(
+//    CarbonCommonConstants.CARBON_BLOOM_INDEX_PARALEL_PRUNING_ENABLED, "true")
 
   override protected def beforeAll(): Unit = {
     deleteFile(bigFile)
@@ -123,6 +125,8 @@ class BloomCoarseGrainDataMapFunctionSuite  extends QueryTest with BeforeAndAfte
 
     sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable").show(false)
     checkExistence(sql(s"SHOW DATAMAP ON TABLE $bloomDMSampleTable"), true, dataMapName)
+    sql(s"explain select * from $bloomDMSampleTable where id = 1").show(false)
+    sql(s"explain select * from $bloomDMSampleTable where city = 'city_1'").show(false)
     sql(s"select * from $bloomDMSampleTable where id = 1").show(false)
     sql(s"select * from $bloomDMSampleTable where city = 'city_1'").show(false)
     checkBasicQuery(dataMapName, bloomDMSampleTable, normalTable)

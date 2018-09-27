@@ -26,11 +26,17 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.apache.carbondata.common.annotations.InterfaceAudience;
 import org.apache.carbondata.common.logging.LogService;
@@ -61,6 +67,7 @@ import org.apache.carbondata.core.scan.expression.conditional.InExpression;
 import org.apache.carbondata.core.scan.expression.conditional.ListExpression;
 import org.apache.carbondata.core.scan.filter.resolver.FilterResolverIntf;
 import org.apache.carbondata.core.util.CarbonProperties;
+import org.apache.carbondata.core.util.CarbonThreadFactory;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.DataTypeUtil;
 import org.apache.carbondata.processing.loading.DataField;
@@ -87,6 +94,8 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
   private Path indexPath;
   private Set<String> filteredShard;
   private boolean needShardPrune;
+  private boolean parallelPruningEnabled = false;
+  private ExecutorService executorService;
   /**
    * This is used to convert literal filter value to internal carbon value
    */
@@ -100,6 +109,25 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
     if (dataMapModel instanceof BloomDataMapModel) {
       BloomDataMapModel model = (BloomDataMapModel) dataMapModel;
       this.cache = model.getCache();
+    }
+
+    this.parallelPruningEnabled = CarbonProperties.getInstance().getProperty(
+        CarbonCommonConstants.CARBON_BLOOM_INDEX_PARALEL_PRUNING_ENABLED,
+        CarbonCommonConstants.CARBON_BLOOM_INDEX_PARALEL_PRUNING_ENABLED_DEFAULT)
+        .equalsIgnoreCase("true");
+    if (parallelPruningEnabled) {
+      String parallelismStr = CarbonProperties.getInstance().getProperty(
+          CarbonCommonConstants.CARBON_BLOOM_INDEX_PARALLEL_PRUNING_PARALLELISM,
+          CarbonCommonConstants.CARBON_BLOOM_INDEX_PARALLEL_PRUNING_PARALLELISM_DEFAULT_VAL);
+      int parallelism;
+      try {
+        parallelism = Integer.parseInt(parallelismStr);
+      } catch (NumberFormatException e) {
+        parallelism = Integer.parseInt(
+            CarbonCommonConstants.CARBON_BLOOM_INDEX_PARALLEL_PRUNING_PARALLELISM_DEFAULT_VAL);
+      }
+      this.executorService = Executors.newFixedThreadPool(parallelism,
+          new CarbonThreadFactory("BloomFilterDataMapPruningPool: "));
     }
   }
 
@@ -183,31 +211,78 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
       LOGGER.error(e, "Exception occurs while creating query model");
       throw new RuntimeException(e);
     }
-    for (BloomQueryModel bloomQueryModel : bloomQueryModels) {
-      LOGGER.debug("prune blocklet for query: " + bloomQueryModel);
-      BloomCacheKeyValue.CacheKey cacheKey = new BloomCacheKeyValue.CacheKey(
-          this.indexPath.toString(), bloomQueryModel.columnName);
-      BloomCacheKeyValue.CacheValue cacheValue = cache.get(cacheKey);
-      List<CarbonBloomFilter> bloomIndexList = cacheValue.getBloomFilters();
-      for (CarbonBloomFilter bloomFilter : bloomIndexList) {
-        if (needShardPrune && !filteredShard.contains(bloomFilter.getShardName())) {
-          // skip shard which has been pruned in Main datamap
-          continue;
+
+    if (parallelPruningEnabled) {
+      List<Future<List<Blocklet>>> futures = new ArrayList<>(bloomQueryModels.size());
+      for (BloomQueryModel bloomQueryModel : bloomQueryModels) {
+        futures.add(executorService.submit(new PruningThread(bloomQueryModel)));
+      }
+      try {
+        // iterate the list again until all the thread are done
+        Iterator<Future<List<Blocklet>>> iterator;
+        while (futures.size() != 0) {
+          iterator = futures.iterator();
+          while (iterator.hasNext()) {
+            Future<List<Blocklet>> future = iterator.next();
+            if (future.isDone()) {
+              hitBlocklets.addAll(future.get());
+              iterator.remove();
+            }
+          }
         }
-        boolean scanRequired = bloomFilter.membershipTest(new Key(bloomQueryModel.filterValue));
-        if (scanRequired) {
-          LOGGER.debug(String.format("BloomCoarseGrainDataMap: Need to scan -> blocklet#%s",
-              String.valueOf(bloomFilter.getBlockletNo())));
-          Blocklet blocklet = new Blocklet(bloomFilter.getShardName(),
-                  String.valueOf(bloomFilter.getBlockletNo()));
-          hitBlocklets.add(blocklet);
-        } else {
-          LOGGER.debug(String.format("BloomCoarseGrainDataMap: Skip scan -> blocklet#%s",
-              String.valueOf(bloomFilter.getBlockletNo())));
-        }
+      } catch (InterruptedException | ExecutionException e) {
+        LOGGER.error(e);
+        throw new RuntimeException(e);
+      }
+    } else {
+      for (BloomQueryModel bloomQueryModel : bloomQueryModels) {
+        hitBlocklets.addAll(pruneByQueryModel(bloomQueryModel));
       }
     }
+
     return new ArrayList<>(hitBlocklets);
+  }
+
+  private List<Blocklet> pruneByQueryModel(BloomQueryModel bloomQueryModel) throws IOException {
+    List<Blocklet> hitBlocklets = new ArrayList<>();
+    LOGGER.error("prune blocklet for query: " + bloomQueryModel);
+    BloomCacheKeyValue.CacheKey cacheKey = new BloomCacheKeyValue.CacheKey(
+        this.indexPath.toString(), bloomQueryModel.columnName);
+    BloomCacheKeyValue.CacheValue cacheValue = cache.get(cacheKey);
+    List<CarbonBloomFilter> bloomIndexList = cacheValue.getBloomFilters();
+    for (CarbonBloomFilter bloomFilter : bloomIndexList) {
+      if (needShardPrune && !filteredShard.contains(bloomFilter.getShardName())) {
+        // skip shard which has been pruned in Main datamap
+        LOGGER.error(String.format("BloomCoarseGrainDataMap: Skip scan -> shard#%s",
+            bloomFilter.getShardName()));
+        continue;
+      }
+      boolean scanRequired = bloomFilter.membershipTest(new Key(bloomQueryModel.filterValue));
+      if (scanRequired) {
+        LOGGER.error(String.format("BloomCoarseGrainDataMap: Need to scan -> blocklet#%s",
+            String.valueOf(bloomFilter.getBlockletNo())));
+        Blocklet blocklet = new Blocklet(bloomFilter.getShardName(),
+            String.valueOf(bloomFilter.getBlockletNo()));
+        hitBlocklets.add(blocklet);
+      } else {
+        LOGGER.error(String.format("BloomCoarseGrainDataMap: Skip scan -> blocklet#%s",
+            String.valueOf(bloomFilter.getBlockletNo())));
+      }
+    }
+    return hitBlocklets;
+  }
+
+  private final class PruningThread implements Callable<List<Blocklet>> {
+    private BloomQueryModel bloomQueryModel;
+
+    private PruningThread(BloomQueryModel bloomQueryModel) {
+      this.bloomQueryModel = bloomQueryModel;
+    }
+
+    @Override
+    public List<Blocklet> call() throws Exception {
+      return pruneByQueryModel(bloomQueryModel);
+    }
   }
 
   private List<BloomQueryModel> createQueryModel(Expression expression)
@@ -370,6 +445,9 @@ public class BloomCoarseGrainDataMap extends CoarseGrainDataMap {
 
   @Override
   public void clear() {
+    if (executorService != null) {
+      executorService.shutdownNow();
+    }
   }
 
   static class BloomQueryModel {

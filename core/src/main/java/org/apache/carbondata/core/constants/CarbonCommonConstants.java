@@ -1796,6 +1796,18 @@ public final class CarbonCommonConstants {
   public static final String CARBON_LUCENE_INDEX_STOP_WORDS_DEFAULT = "false";
 
   /**
+   * whether to enable parallel pruning for bloomfilter datamap
+   */
+  public static final String CARBON_BLOOM_INDEX_PARALEL_PRUNING_ENABLED =
+      "carbon.bloom.index.parallel.pruning.enabled";
+  public static final String CARBON_BLOOM_INDEX_PARALEL_PRUNING_ENABLED_DEFAULT = "false";
+  /**
+   * how many threads to use for parallel pruning
+   */
+  public static final String CARBON_BLOOM_INDEX_PARALLEL_PRUNING_PARALLELISM =
+      "carbon.bloom.index.parallel.pruning.parallelism";
+  public static final String CARBON_BLOOM_INDEX_PARALLEL_PRUNING_PARALLELISM_DEFAULT_VAL = "3";
+  /**
    * The node loads the smallest amount of data
    */
   @CarbonProperty
