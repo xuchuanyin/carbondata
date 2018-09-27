@@ -71,6 +71,11 @@ public interface Cache<K, V> {
   void invalidate(K key);
 
   /**
+   * This method will remove all the cache
+   */
+  void invalidateAll();
+
+  /**
    * This method will add the value to the cache for the given key
    *
    * @param key

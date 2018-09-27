@@ -85,6 +85,11 @@ public class BloomDataMapCache
   }
 
   @Override
+  public void invalidateAll() {
+    lruCache.clear();
+  }
+
+  @Override
   public void put(BloomCacheKeyValue.CacheKey key, BloomCacheKeyValue.CacheValue value)
       throws IOException, MemoryException {
     // No impl required.

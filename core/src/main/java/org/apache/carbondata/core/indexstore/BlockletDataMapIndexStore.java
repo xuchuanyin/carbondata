@@ -238,6 +238,11 @@ public class BlockletDataMapIndexStore
   }
 
   @Override
+  public void invalidateAll() {
+    lruCache.clear();
+  }
+
+  @Override
   public void put(TableBlockIndexUniqueIdentifierWrapper tableBlockIndexUniqueIdentifierWrapper,
       BlockletDataMapIndexWrapper wrapper) throws IOException, MemoryException {
     // As dataMap will use unsafe memory, it is not recommended to overwrite an existing entry

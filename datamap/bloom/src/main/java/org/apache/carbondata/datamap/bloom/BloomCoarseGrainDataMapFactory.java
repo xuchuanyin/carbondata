@@ -363,6 +363,7 @@ public class BloomCoarseGrainDataMapFactory extends DataMapFactory<CoarseGrainDa
       for (Segment segment : validSegments) {
         deleteDatamapData(segment);
       }
+      cache.invalidateAll();
     } catch (IOException e) {
       LOGGER.error("drop datamap failed, failed to delete datamap directory");
     }

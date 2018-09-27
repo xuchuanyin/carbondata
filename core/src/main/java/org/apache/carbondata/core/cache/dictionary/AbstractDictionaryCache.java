@@ -290,6 +290,11 @@ public abstract class AbstractDictionaryCache<K extends DictionaryColumnUniqueId
     }
   }
 
+  @Override
+  public void invalidateAll() {
+    carbonLRUCache.clear();
+  }
+
   /**
    * calculate the probable size of Dictionary in java heap
    * Use the value to check if can be added to lru cache
