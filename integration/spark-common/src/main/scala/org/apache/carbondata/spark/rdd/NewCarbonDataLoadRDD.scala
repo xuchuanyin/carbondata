@@ -24,7 +24,6 @@ import java.util.{Date, UUID}
 
 import scala.collection.mutable
 import scala.util.Random
-import scala.util.control.NonFatal
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapreduce.{TaskAttemptID, TaskType}
@@ -38,7 +37,6 @@ import org.apache.spark.util.SparkUtil
 
 import org.apache.carbondata.common.CarbonIterator
 import org.apache.carbondata.common.logging.LogServiceFactory
-import org.apache.carbondata.common.logging.impl.StandardLogService
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.datatype.DataTypes
@@ -220,9 +218,6 @@ class NewCarbonDataLoadRDD[K, V](
         CarbonQueryUtil.splitFilePath(carbonLoadModel.getFactFilePath, fileList, ",")
         model = carbonLoadModel.getCopyWithPartition(
           carbonLoadModel.getCsvHeader, carbonLoadModel.getCsvDelimiter)
-        StandardLogService.setThreadName(StandardLogService
-          .getPartitionID(model.getCarbonDataLoadSchema.getCarbonTable.getTableUniqueName)
-          , ThreadLocalTaskInfo.getCarbonTaskInfo.getTaskId + "")
         val readers =
           split.nodeBlocksDetail.map(format.createRecordReader(_, hadoopAttemptContext))
         readers.zipWithIndex.map { case (reader, index) =>
