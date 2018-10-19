@@ -427,6 +427,44 @@ class VarcharDataTypesBasicTestCase extends QueryTest with BeforeAndAfterEach wi
     checkQuery()
   }
 
+  test("test spark file format table: write from dataframe with long_string datatype whose order of fields is not the same as that in table") {
+    if (sqlContext.sparkSession.version.startsWith("2.1")) {
+      sql(
+        s"""
+           | CREATE TABLE if not exists $longStringTable(
+           | id INT, name STRING, description STRING, address STRING, note STRING
+           | ) USING carbon
+           | OPTIONS("LONG_STRING_COLUMNS" "description, note", "dictionary_include" "name",
+           | "sort_columns" "id")
+           |""".
+          stripMargin)
+    } else {
+      sql(
+        s"""
+           | CREATE TABLE if not exists $longStringTable(
+           | id INT, name STRING, description STRING, address STRING, note STRING
+           | ) USING carbon
+           | OPTIONS("LONG_STRING_COLUMNS"="description, note", "dictionary_include"="name",
+           | "sort_columns"="id")
+           |""".
+          stripMargin)
+    }
+
+    sql(s"desc formatted $longStringTable").show(false)
+
+    prepareDF()
+    // the order of fields in dataframe is different from that in create table
+    longStringDF.select("note", "address", "description", "name", "id")
+      .write
+      .format("carbon")
+      .mode(SaveMode.Append)
+      .saveAsTable(longStringTable)
+
+    sql(s"SELECT * FROM $longStringTable limit 20").show(false)
+
+    checkQuery()
+  }
+
   test("desc table shows long_string_columns property") {
     sql(
       s"""
