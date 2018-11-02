@@ -402,6 +402,13 @@ public final class CarbonCommonConstants {
    */
   @CarbonProperty
   public static final String NUM_CORES_COMPACTING = "carbon.number.of.cores.while.compacting";
+
+  /**
+   * parallelism for producer while doing loading and compaction. By default its value will be
+   * the number of cores. Increasing this value will cause more memory consumption.
+   */
+  @CarbonProperty
+  public static final String CARBON_LOAD_PRODUCE_PARALLELISM = "carbon.load.producer.parallelism";
   /**
    * Number of cores to be used while alter partition
    */

@@ -312,7 +312,7 @@ public class CarbonFactDataHandlerModel {
     }
     carbonFactDataHandlerModel.dataMapWriterlistener = listener;
     carbonFactDataHandlerModel.writingCoresCount = configuration.getWritingCoresCount();
-    carbonFactDataHandlerModel.initNumberOfCores();
+    carbonFactDataHandlerModel.initNumberOfProducerCores();
     carbonFactDataHandlerModel.setVarcharDimIdxInNoDict(varcharDimIdxInNoDict);
     return carbonFactDataHandlerModel;
   }
@@ -400,7 +400,7 @@ public class CarbonFactDataHandlerModel {
             loadModel.getSegmentId()),
         segmentProperties);
     carbonFactDataHandlerModel.dataMapWriterlistener = listener;
-    carbonFactDataHandlerModel.initNumberOfCores();
+    carbonFactDataHandlerModel.initNumberOfProducerCores();
     carbonFactDataHandlerModel
         .setColumnLocalDictGenMap(CarbonUtil.getLocalDictionaryModel(carbonTable));
     carbonFactDataHandlerModel.setVarcharDimIdxInNoDict(varcharDimIdxInNoDict);
@@ -570,7 +570,7 @@ public class CarbonFactDataHandlerModel {
    */
   public void setCompactionFlow(boolean compactionFlow) {
     isCompactionFlow = compactionFlow;
-    initNumberOfCores();
+    initNumberOfProducerCores();
   }
 
   /**
@@ -684,22 +684,15 @@ public class CarbonFactDataHandlerModel {
     this.columnLocalDictGenMap = columnLocalDictGenMap;
   }
 
-  private void initNumberOfCores() {
-    // in compaction flow the measure with decimal type will come as spark decimal.
-    // need to convert it to byte array.
-    if (this.isCompactionFlow()) {
-      try {
-        this.numberOfCores = Integer.parseInt(CarbonProperties.getInstance()
-            .getProperty(CarbonCommonConstants.NUM_CORES_COMPACTING,
-                CarbonCommonConstants.NUM_CORES_DEFAULT_VAL));
-      } catch (NumberFormatException exc) {
-        LOGGER.error("Configured value for property " + CarbonCommonConstants.NUM_CORES_COMPACTING
-            + "is wrong.Falling back to the default value "
-            + CarbonCommonConstants.NUM_CORES_DEFAULT_VAL);
-        this.numberOfCores = Integer.parseInt(CarbonCommonConstants.NUM_CORES_DEFAULT_VAL);
-      }
-    } else {
+  private void initNumberOfProducerCores() {
+    try {
+      this.numberOfCores = Integer.parseInt(CarbonProperties.getInstance()
+          .getProperty(CarbonCommonConstants.CARBON_LOAD_PRODUCE_PARALLELISM,
+              String.valueOf(CarbonProperties.getInstance().getNumberOfCores())));
+    } catch (NumberFormatException exc) {
       this.numberOfCores = CarbonProperties.getInstance().getNumberOfCores();
+      LOGGER.error("Value configured for " + CarbonCommonConstants.CARBON_LOAD_PRODUCE_PARALLELISM
+          + "is invalid, we will consider using the value " + numberOfCores);
     }
 
     if (this.sortScope != null && this.sortScope.equals(SortScopeOptions.SortScope.GLOBAL_SORT)) {
