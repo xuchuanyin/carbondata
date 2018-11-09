@@ -523,7 +523,7 @@ class CompactionSupportGlobalSortParameterTest extends QueryTest with BeforeAndA
   }
 
   test("MAJOR, ENABLE_PREFETCH_DURING_COMPACTION: true") {
-    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_ENABLE, "true")
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM, "2")
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_AUTO_LOAD_MERGE, "false")
     for (i <- 0 until 2) {
       sql(s"LOAD DATA LOCAL INPATH '$file1' INTO TABLE carbon_localsort")
@@ -557,8 +557,8 @@ class CompactionSupportGlobalSortParameterTest extends QueryTest with BeforeAndA
     checkExistence(sql("SHOW SEGMENTS FOR TABLE compaction_globalsort"), true, "Marked for Delete")
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.ENABLE_AUTO_LOAD_MERGE,
       CarbonCommonConstants.DEFAULT_ENABLE_AUTO_LOAD_MERGE)
-    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_ENABLE,
-      CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_ENABLE_DEFAULT)
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM,
+      CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM_DEFAULT)
   }
 
   private def resetConf() {

@@ -49,15 +49,15 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
    */
   private CarbonIterator<RowBatch> detailRawQueryResultIterator;
 
-  private boolean prefetchEnabled;
-  private List<Object[]> currentBuffer;
-  private List<Object[]> backupBuffer;
-  private int currentIdxInBuffer;
   private ExecutorService executorService;
-  private Future<Void> fetchFuture;
   private Object[] currentRawRow = null;
-  private boolean isBackupFilled = false;
 
+  private int prefetchParallelism;
+  private Future[] backupFutures;
+  private List<Object[]>[] backupBuffers;
+  private int currentWorkingBufferIdx;
+  private int currentRowIdxInBuffer;
+  private int currentFillingBufferIdx;
   /**
    * LOGGER
    */
@@ -70,7 +70,26 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
     this.detailRawQueryResultIterator = detailRawQueryResultIterator;
     this.sourceSegProperties = sourceSegProperties;
     this.destinationSegProperties = destinationSegProperties;
-    this.executorService = Executors.newFixedThreadPool(1);
+    String parallelismStr = CarbonProperties.getInstance().getProperty(
+        CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM,
+        CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM_DEFAULT);
+    try {
+      prefetchParallelism = Integer.parseInt(parallelismStr);
+      if (prefetchParallelism < 1) {
+        throw new NumberFormatException("Value should be greater than 0");
+      }
+    } catch (NumberFormatException e) {
+      LOGGER.warn(String.format(
+          "The configured value %s for %s is invalid. Using default value %s.",
+          parallelismStr,
+          CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM,
+          CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM_DEFAULT));
+      prefetchParallelism = Integer.parseInt(
+          CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_PARALLELISM_DEFAULT);
+    }
+    this.executorService = Executors.newFixedThreadPool(prefetchParallelism);
+    this.backupFutures = new Future[prefetchParallelism];
+    this.backupBuffers = new List[prefetchParallelism];
 
     if (!isStreamingHandoff) {
       init();
@@ -78,14 +97,15 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
   }
 
   private void init() {
-    this.prefetchEnabled = CarbonProperties.getInstance().getProperty(
-        CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_ENABLE,
-        CarbonCommonConstants.CARBON_COMPACTION_PREFETCH_ENABLE_DEFAULT).equalsIgnoreCase("true");
     try {
-      new RowsFetcher(false).call();
-      if (prefetchEnabled) {
-        this.fetchFuture = executorService.submit(new RowsFetcher(true));
+      backupBuffers[0] = new RowsFetcher().call();
+      currentFillingBufferIdx = 1;
+      while (currentFillingBufferIdx < prefetchParallelism) {
+        backupFutures[currentFillingBufferIdx] = executorService.submit(new RowsFetcher());
+        currentFillingBufferIdx++;
       }
+      currentFillingBufferIdx = (currentFillingBufferIdx - 1) % prefetchParallelism;
+
     } catch (Exception e) {
       LOGGER.error("Error occurs while fetching records", e);
       throw new RuntimeException(e);
@@ -95,54 +115,44 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
   /**
    * fetch rows
    */
-  private final class RowsFetcher implements Callable<Void> {
-    private boolean isBackupFilling;
-
-    private RowsFetcher(boolean isBackupFilling) {
-      this.isBackupFilling = isBackupFilling;
+  private final class RowsFetcher implements Callable<List<Object[]>> {
+    private RowsFetcher() {
     }
 
     @Override
-    public Void call() throws Exception {
-      if (isBackupFilling) {
-        backupBuffer = fetchRows();
-        isBackupFilled = true;
-      } else {
-        currentBuffer = fetchRows();
+    public List<Object[]> call() throws Exception {
+      List<Object[]> converted = new ArrayList<>();
+      if (detailRawQueryResultIterator.hasNext()) {
+        for (Object[] r : detailRawQueryResultIterator.next().getRows()) {
+          converted.add(convertRow(r));
+        }
       }
-      return null;
+      return converted;
     }
-  }
-
-  private List<Object[]> fetchRows() throws Exception {
-    List<Object[]> converted = new ArrayList<>();
-    if (detailRawQueryResultIterator.hasNext()) {
-      for (Object[] r : detailRawQueryResultIterator.next().getRows()) {
-        converted.add(convertRow(r));
-      }
-    }
-    return converted;
   }
 
   private void fillDataFromPrefetch() {
     try {
-      if (currentIdxInBuffer >= currentBuffer.size() && 0 != currentIdxInBuffer) {
-        if (prefetchEnabled) {
-          if (!isBackupFilled) {
-            fetchFuture.get();
-          }
-          // copy backup buffer to current buffer and fill backup buffer asyn
-          currentIdxInBuffer = 0;
-          currentBuffer.clear();
-          currentBuffer = backupBuffer;
-          isBackupFilled = false;
-          fetchFuture = executorService.submit(new RowsFetcher(true));
-        } else {
-          currentIdxInBuffer = 0;
-          new RowsFetcher(false).call();
+      if (currentRowIdxInBuffer >= backupBuffers[currentWorkingBufferIdx].size()
+          && 0 != currentRowIdxInBuffer) {
+        if (prefetchParallelism == 1) {
+          backupBuffers[currentWorkingBufferIdx] = new RowsFetcher().call();
+          currentRowIdxInBuffer = 0;
+          return;
         }
+
+        // clear previous buffer and switch to next buffer as working buffer
+        backupBuffers[currentWorkingBufferIdx] = null;
+        currentWorkingBufferIdx = (currentWorkingBufferIdx + 1) % prefetchParallelism;
+        backupBuffers[currentWorkingBufferIdx] =
+            (List<Object[]>) backupFutures[currentWorkingBufferIdx].get();
+        currentRowIdxInBuffer = 0;
+        // filling backup buffer asynchronously
+        currentFillingBufferIdx = (currentFillingBufferIdx + 1) % prefetchParallelism;
+        backupFutures[currentFillingBufferIdx] = executorService.submit(new RowsFetcher());
       }
     } catch (Exception e) {
+      LOGGER.error(e);
       throw new RuntimeException(e);
     }
   }
@@ -152,8 +162,8 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
    */
   private void popRow() {
     fillDataFromPrefetch();
-    currentRawRow = currentBuffer.get(currentIdxInBuffer);
-    currentIdxInBuffer++;
+    currentRawRow = backupBuffers[currentWorkingBufferIdx].get(currentRowIdxInBuffer);
+    currentRowIdxInBuffer++;
   }
 
   /**
@@ -161,13 +171,13 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
    */
   private void pickRow() {
     fillDataFromPrefetch();
-    currentRawRow = currentBuffer.get(currentIdxInBuffer);
+    currentRawRow = backupBuffers[currentWorkingBufferIdx].get(currentRowIdxInBuffer);
   }
 
   @Override
   public boolean hasNext() {
     fillDataFromPrefetch();
-    if (currentIdxInBuffer < currentBuffer.size()) {
+    if (currentRowIdxInBuffer < backupBuffers[currentWorkingBufferIdx].size()) {
       return true;
     }
 

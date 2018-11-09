@@ -955,13 +955,19 @@ public final class CarbonCommonConstants {
   public static final String CARBON_SORT_STORAGE_INMEMORY_IN_MB =
       "carbon.sort.storage.inmemory.size.inmb";
   public static final int CARBON_SORT_STORAGE_INMEMORY_IN_MB_DEFAULT = 512;
-  /*
-   * whether to enable prefetch for rowbatch to enhance row reconstruction during compaction
+
+  /**
+   * parallelism for prefetching records while compaction
    */
   @CarbonProperty
-  public static final String CARBON_COMPACTION_PREFETCH_ENABLE =
-      "carbon.compaction.prefetch.enable";
-  public static final String CARBON_COMPACTION_PREFETCH_ENABLE_DEFAULT = "false";
+  public static final String CARBON_COMPACTION_PREFETCH_PARALLELISM =
+      "carbon.compaction.prefetch.parallelism";
+  /**
+   * default value 1 means no asyn prefetch will be performed.
+   * Increase this value will consume more memory and may result in OOM problems.
+   * Setting it to 2 or 3 is fine.
+   */
+  public static final String CARBON_COMPACTION_PREFETCH_PARALLELISM_DEFAULT = "1";
 
   /**
    * compression mode used by lucene for index writing, this conf will be passed to lucene writer
