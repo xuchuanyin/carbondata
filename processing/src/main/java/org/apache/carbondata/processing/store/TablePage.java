@@ -26,8 +26,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.ColumnType;
 import org.apache.carbondata.core.datastore.TableSpec;
 import org.apache.carbondata.core.datastore.exception.CarbonDataWriterException;
@@ -52,6 +58,7 @@ import org.apache.carbondata.core.localdictionary.generator.LocalDictionaryGener
 import org.apache.carbondata.core.memory.MemoryException;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.DataTypeUtil;
 import org.apache.carbondata.processing.datatypes.GenericDataType;
 
@@ -95,6 +102,10 @@ public class TablePage {
   // name of compressor that used to compress column data,
   // currently all the columns share the same compressor.
   private String columnCompressor;
+  private boolean enableParallelizeEncoding;
+  private ExecutorService encoderExecutorService;
+  private Future<List<EncodedColumnPage>>[] dimEncoderFutures;
+  private Future<EncodedColumnPage>[] msrEncoderFutures;
 
   TablePage(CarbonFactDataHandlerModel model, int pageSize) throws MemoryException {
     this.model = model;
@@ -102,6 +113,16 @@ public class TablePage {
     int numDictDimension = model.getMDKeyGenerator().getDimCount();
     TableSpec tableSpec = model.getTableSpec();
     this.columnCompressor = model.getColumnCompressor();
+    this.enableParallelizeEncoding = CarbonProperties.getInstance().getProperty(
+        CarbonCommonConstants.CARBON_LOAD_PARALLELIZE_ENCODING_ENABLE,
+        CarbonCommonConstants.CARBON_LOAD_PARALLELIZE_ENCODING_ENABLE_DEFAULT)
+        .equalsIgnoreCase("true");
+    if (enableParallelizeEncoding) {
+      encoderExecutorService =
+          Executors.newFixedThreadPool(tableSpec.getNumDimensions() + tableSpec.getNumMeasures());
+      dimEncoderFutures = new Future[tableSpec.getNumDimensions()];
+      msrEncoderFutures = new Future[tableSpec.getNumMeasures()];
+    }
 
     dictDimensionPages = new ColumnPage[numDictDimension];
     noDictDimensionPages = new ColumnPage[model.getNoDictionaryCount()];
@@ -342,6 +363,9 @@ public class TablePage {
         page.freeMemory();
       }
     }
+    if (encoderExecutorService != null) {
+      encoderExecutorService.shutdown();
+    }
   }
 
   // Adds length as a short element (first 2 bytes) to the head of the input byte array
@@ -368,8 +392,31 @@ public class TablePage {
 
   void encode() throws KeyGenException, MemoryException, IOException {
     // encode dimensions and measure
-    EncodedColumnPage[] dimensions = encodeAndCompressDimensions();
-    EncodedColumnPage[] measures = encodeAndCompressMeasures();
+    EncodedColumnPage[] dimensions;
+    EncodedColumnPage[] measures;
+    if (!enableParallelizeEncoding) {
+      dimensions = encodeAndCompressDimensions();
+      measures = encodeAndCompressMeasures();
+    } else {
+      try {
+        encodeAndCompressDimensionsAsyn();
+        encodeAndCompressMeasuresAsyn();
+        List<EncodedColumnPage> encodedDims = new ArrayList<>();
+        for (Future<List<EncodedColumnPage>> dimFurture : dimEncoderFutures) {
+          encodedDims.addAll(dimFurture.get());
+        }
+        dimensions = encodedDims.toArray(new EncodedColumnPage[0]);
+
+        List<EncodedColumnPage> encodedMsrs = new ArrayList<>();
+        for (Future<EncodedColumnPage> msrFurture : msrEncoderFutures) {
+          encodedMsrs.add(msrFurture.get());
+        }
+        measures = encodedMsrs.toArray(new EncodedColumnPage[0]);
+      } catch (InterruptedException | ExecutionException e) {
+        LOGGER.error(e);
+        throw new IOException(e);
+      }
+    }
     this.encodedTablePage = EncodedTablePage.newInstance(pageSize, dimensions, measures, key);
   }
 
@@ -387,6 +434,28 @@ public class TablePage {
       encodedMeasures[i] = encoder.encode(measurePages[i]);
     }
     return encodedMeasures;
+  }
+
+  private void encodeAndCompressMeasuresAsyn()
+      throws MemoryException, IOException {
+    for (int i = 0; i < measurePages.length; i++) {
+      msrEncoderFutures[i] = encoderExecutorService.submit(new MeasureEncodeThread(i));
+    }
+  }
+
+  private final class MeasureEncodeThread implements Callable<EncodedColumnPage> {
+    private int idxOffset;
+
+    public MeasureEncodeThread(int idxOffset) {
+      this.idxOffset = idxOffset;
+    }
+
+    @Override
+    public EncodedColumnPage call() throws Exception {
+      ColumnPageEncoder encoder = encodingFactory.createEncoder(
+          model.getTableSpec().getMeasureSpec(idxOffset), measurePages[idxOffset]);
+      return encoder.encode(measurePages[idxOffset]);
+    }
   }
 
   // apply and compress each dimension, set encoded data in `encodedData`
@@ -445,6 +514,101 @@ public class TablePage {
 
     encodedDimensions.addAll(encodedComplexDimenions);
     return encodedDimensions.toArray(new EncodedColumnPage[encodedDimensions.size()]);
+  }
+
+  private final class DimensionEncodeThread implements Callable<List<EncodedColumnPage>> {
+    private TableSpec.DimensionSpec spec;
+    private int idxOffset;
+
+    public DimensionEncodeThread(TableSpec.DimensionSpec spec, int idxOffset) {
+      this.spec = spec;
+      this.idxOffset = idxOffset;
+    }
+
+    @Override
+    public List<EncodedColumnPage> call() throws Exception {
+      ColumnPageEncoder columnPageEncoder;
+      switch (spec.getColumnType()) {
+        case GLOBAL_DICTIONARY:
+        case DIRECT_DICTIONARY:
+          columnPageEncoder = encodingFactory.createEncoder(
+              spec,
+              dictDimensionPages[idxOffset]);
+          return Arrays.asList(columnPageEncoder.encode(dictDimensionPages[idxOffset]));
+        case PLAIN_VALUE:
+          columnPageEncoder = encodingFactory.createEncoder(
+              spec,
+              noDictDimensionPages[idxOffset]);
+          if (LOGGER.isDebugEnabled()) {
+            DataType targetDataType =
+                columnPageEncoder.getTargetDataType(noDictDimensionPages[idxOffset]);
+            if (null != targetDataType) {
+              LOGGER.debug(
+                  "Encoder result ---> Source data type: " + noDictDimensionPages[idxOffset]
+                      .getDataType().getName() + " Destination data type: " + targetDataType
+                      .getName() + " for the column: " + noDictDimensionPages[idxOffset]
+                      .getColumnSpec().getFieldName() + " having encoding type: "
+                      + columnPageEncoder.getEncodingType());
+            }
+          }
+          return Arrays.asList(columnPageEncoder.encode(noDictDimensionPages[idxOffset]));
+        case COMPLEX:
+          return Arrays.asList(
+              ColumnPageEncoder.encodeComplexColumn(complexDimensionPages[idxOffset]));
+        default:
+          throw new IllegalArgumentException("unsupported dimension type:" + spec.getColumnType());
+      }
+    }
+  }
+
+  private void encodeAndCompressDimensionsAsyn()
+      throws KeyGenException, IOException, MemoryException {
+    TableSpec tableSpec = model.getTableSpec();
+    int dictIndex = 0;
+    int noDictIndex = 0;
+    int complexDimIndex = 0;
+    int numDimensions = tableSpec.getNumDimensions();
+    Future<List<EncodedColumnPage>>[] tmpFutures = new Future[numDimensions];
+
+    List<Integer> complexPagesIdx = new ArrayList<>();
+    for (int i = 0; i < numDimensions; i++) {
+      TableSpec.DimensionSpec spec = tableSpec.getDimensionSpec(i);
+      switch (spec.getColumnType()) {
+        case GLOBAL_DICTIONARY:
+        case DIRECT_DICTIONARY:
+          tmpFutures[i] = encoderExecutorService.submit(
+              new DimensionEncodeThread(spec, dictIndex));
+          dictIndex++;
+          break;
+        case PLAIN_VALUE:
+          tmpFutures[i] = encoderExecutorService.submit(
+              new DimensionEncodeThread(spec, noDictIndex));
+          noDictIndex++;
+          break;
+        case COMPLEX:
+          tmpFutures[i] = encoderExecutorService.submit(
+              new DimensionEncodeThread(spec, complexDimIndex));
+          complexPagesIdx.add(i);
+          complexDimIndex++;
+          break;
+        default:
+          throw new IllegalArgumentException("unsupported dimension type:" + spec
+              .getColumnType());
+      }
+    }
+
+    // rearrange the position of each fields so that complex will at the end
+    int j = 0;
+    int k = 0;
+    for (int i = 0; i < tmpFutures.length; i++) {
+      if (complexPagesIdx.contains(i)) {
+        dimEncoderFutures[tmpFutures.length - complexPagesIdx.size() + k] = tmpFutures[i];
+        k++;
+      } else {
+        dimEncoderFutures[j] = tmpFutures[i];
+        j++;
+      }
+    }
   }
 
   /**

@@ -962,6 +962,9 @@ public final class CarbonCommonConstants {
   public static final String CARBON_COMPACTION_PREFETCH_ENABLE =
       "carbon.compaction.prefetch.enable";
   public static final String CARBON_COMPACTION_PREFETCH_ENABLE_DEFAULT = "false";
+  public static final String CARBON_LOAD_PARALLELIZE_ENCODING_ENABLE =
+      "carbon.load.parallelize.encoding.enable";
+  public static final String CARBON_LOAD_PARALLELIZE_ENCODING_ENABLE_DEFAULT = "false";
 
   /**
    * compression mode used by lucene for index writing, this conf will be passed to lucene writer
